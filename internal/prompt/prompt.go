@@ -91,7 +91,7 @@ func MultiSelect(label string, options []actions.SelectOption) ([]string, error)
 	return result, nil
 }
 
-// Confirm asks a yes/no question.
+// Confirm asks a yes/no question (default: no).
 func Confirm(message string) (bool, error) {
 	fmt.Printf("  %s [y/N]: ", message)
 	line, err := reader.ReadString('\n')
@@ -100,6 +100,20 @@ func Confirm(message string) (bool, error) {
 	}
 	line = strings.TrimSpace(strings.ToLower(line))
 	return line == "y" || line == "yes", nil
+}
+
+// ConfirmYes asks a yes/no question (default: yes).
+func ConfirmYes(message string) (bool, error) {
+	fmt.Printf("  %s [Y/n]: ", message)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return false, err
+	}
+	line = strings.TrimSpace(strings.ToLower(line))
+	if line == "" {
+		return true, nil
+	}
+	return line != "n" && line != "no", nil
 }
 
 // CollectInputs collects all required inputs for an action.

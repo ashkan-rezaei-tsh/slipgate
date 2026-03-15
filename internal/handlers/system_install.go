@@ -115,7 +115,7 @@ func handleSystemInstall(ctx *actions.Context) error {
 	out.Print("  ── First Tunnel Setup ──────────────────────────────")
 	out.Print("")
 
-	setupTunnel, err := prompt.Confirm("Set up your first tunnel now?")
+	setupTunnel, err := prompt.ConfirmYes("Set up your first tunnel now?")
 	if err != nil {
 		return err
 	}
@@ -320,7 +320,7 @@ func handleSystemInstall(ctx *actions.Context) error {
 	out.Print("  ── User Setup ──────────────────────────────────────")
 	out.Print("")
 
-	createUser, err := prompt.Confirm("Create a user now?")
+	createUser, err := prompt.ConfirmYes("Create a user now?")
 	if err != nil {
 		return err
 	}
