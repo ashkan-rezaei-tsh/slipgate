@@ -58,11 +58,8 @@ func EnsureDir(path, owner string) error {
 }
 
 // AddSSHUser creates a system user in the slipgate-ssh group.
+// If the user already exists, it updates the password instead.
 func AddSSHUser(username, password string) error {
-	if userExists(username) {
-		return fmt.Errorf("user %q already exists", username)
-	}
-
 	// Ensure SSH group exists
 	if !groupExists(config.SSHGroup) {
 		if err := run("groupadd", "--system", config.SSHGroup); err != nil {
@@ -70,11 +67,13 @@ func AddSSHUser(username, password string) error {
 		}
 	}
 
-	if err := run("useradd", "--system", "--no-create-home",
-		"--shell", "/bin/false",
-		"--gid", config.SSHGroup,
-		username); err != nil {
-		return fmt.Errorf("create user: %w", err)
+	if !userExists(username) {
+		if err := run("useradd", "--system", "--no-create-home",
+			"--shell", "/bin/false",
+			"--gid", config.SSHGroup,
+			username); err != nil {
+			return fmt.Errorf("create user: %w", err)
+		}
 	}
 
 	// Set password
