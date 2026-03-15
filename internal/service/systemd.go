@@ -68,10 +68,14 @@ func Start(name string) error {
 	return run("systemctl", "start", name+".service")
 }
 
-// Stop stops and disables a service.
+// Stop stops and disables a service. Silently skips if the service doesn't exist.
 func Stop(name string) error {
-	_ = run("systemctl", "stop", name+".service")
-	return run("systemctl", "disable", name+".service")
+	if !serviceExists(name) {
+		return nil
+	}
+	_ = runQuiet("systemctl", "stop", name+".service")
+	_ = runQuiet("systemctl", "disable", name+".service")
+	return nil
 }
 
 // Restart restarts a service.
@@ -97,9 +101,12 @@ func Logs(name string, lines string) (string, error) {
 	return string(out), nil
 }
 
-// Remove removes a service unit file.
+// Remove removes a service unit file. Silently skips if it doesn't exist.
 func Remove(name string) error {
 	path := filepath.Join(systemdDir, name+".service")
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil
+	}
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -115,4 +122,16 @@ func run(name string, args ...string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+// runQuiet runs a command suppressing all output.
+func runQuiet(name string, args ...string) error {
+	return exec.Command(name, args...).Run()
+}
+
+// serviceExists checks if a systemd unit file exists.
+func serviceExists(name string) bool {
+	path := filepath.Join(systemdDir, name+".service")
+	_, err := os.Stat(path)
+	return err == nil
 }
