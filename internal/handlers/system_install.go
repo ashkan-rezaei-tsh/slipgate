@@ -346,6 +346,28 @@ func handleSystemInstall(ctx *actions.Context) error {
 		}
 
 		out.Success(fmt.Sprintf("User %q created (SSH + SOCKS)", username))
+
+		// Update NaiveProxy tunnels with user credentials and restart
+		for i := range allTunnels {
+			if allTunnels[i].Transport == config.TransportNaive && allTunnels[i].Naive != nil {
+				allTunnels[i].Naive.User = username
+				allTunnels[i].Naive.Password = password
+				cfg.UpdateTunnel(allTunnels[i])
+			}
+		}
+		if err := cfg.Save(); err != nil {
+			out.Warning("Failed to save config: " + err.Error())
+		}
+
+		// Recreate naive services with correct auth
+		for i := range allTunnels {
+			if allTunnels[i].Transport == config.TransportNaive {
+				out.Info(fmt.Sprintf("Updating NaiveProxy %q with user credentials...", allTunnels[i].Tag))
+				if err := transport.CreateService(&allTunnels[i], cfg); err != nil {
+					out.Warning(fmt.Sprintf("Failed to update %s: %s", allTunnels[i].Tag, err.Error()))
+				}
+			}
+		}
 	}
 
 	// Setup microsocks AFTER user creation so auth is configured from the start

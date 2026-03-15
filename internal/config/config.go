@@ -124,6 +124,18 @@ func (c *Config) AddTunnel(t TunnelConfig) {
 	c.Tunnels = append(c.Tunnels, t)
 }
 
+// UpdateTunnel replaces a tunnel config by tag.
+func (c *Config) UpdateTunnel(t TunnelConfig) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for i := range c.Tunnels {
+		if c.Tunnels[i].Tag == t.Tag {
+			c.Tunnels[i] = t
+			return
+		}
+	}
+}
+
 // RemoveTunnel removes a tunnel by tag.
 func (c *Config) RemoveTunnel(tag string) bool {
 	c.mu.Lock()
