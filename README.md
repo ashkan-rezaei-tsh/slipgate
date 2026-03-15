@@ -175,4 +175,4 @@ make release            # Build release binaries
 
 ## License
 
-MIT
+AGPL-3.0

@@ -235,7 +235,7 @@ func handleSystemInstall(ctx *actions.Context) error {
 
 			case config.TransportNaive:
 				if bIdx == 0 {
-					email, err := prompt.String("Email (for Let's Encrypt)", "")
+					email, err := prompt.String("Email (for Let's Encrypt)", "admin@"+domain)
 					if err != nil {
 						return err
 					}
