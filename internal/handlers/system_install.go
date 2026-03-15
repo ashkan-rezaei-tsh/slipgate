@@ -150,22 +150,29 @@ func handleSystemInstall(ctx *actions.Context) error {
 			continue
 		}
 
-		// Shared state for keys/certs across socks+ssh backends of same transport
-		var sharedDNSTT *config.DNSTTConfig
-		var sharedSlipstream *config.SlipstreamConfig
 		var sharedNaive *config.NaiveConfig
 
-		for bIdx, b := range backends {
+			for bIdx, b := range backends {
 			tag := selectedTransport
+			tunnelDomain := domain
 			if backend == "both" {
 				tag = selectedTransport + "-" + b
+				// SSH backend needs its own subdomain (separate dnstt/slipstream instance)
+				// e.g. t.example.com → ts.example.com
+				if b == config.BackendSSH && selectedTransport != config.TransportNaive {
+					parts := splitDomain(domain)
+					if len(parts) >= 2 {
+						parts[0] = parts[0] + "s"
+						tunnelDomain = joinDomain(parts)
+					}
+				}
 			}
 
 			tunnel := config.TunnelConfig{
 				Tag:       tag,
 				Transport: selectedTransport,
 				Backend:   b,
-				Domain:    domain,
+				Domain:    tunnelDomain,
 				Enabled:   true,
 			}
 
@@ -193,43 +200,25 @@ func handleSystemInstall(ctx *actions.Context) error {
 				privKeyPath := filepath.Join(tunnelDir, "server.key")
 				pubKeyPath := filepath.Join(tunnelDir, "server.pub")
 
-				if bIdx == 0 {
-					out.Info("Generating Curve25519 keypair...")
-					pubKey, err := keys.GenerateDNSTTKeys(privKeyPath, pubKeyPath)
-					if err != nil {
-						return actions.NewError(actions.SystemInstall, "key generation failed", err)
-					}
-					sharedDNSTT = &config.DNSTTConfig{
-						MTU:        config.DefaultMTU,
-						PrivateKey: privKeyPath,
-						PublicKey:  pubKey,
-					}
-					out.Success(fmt.Sprintf("Public key: %s", pubKey))
-				} else if sharedDNSTT != nil {
-					srcDir := config.TunnelDir(allTunnels[len(allTunnels)-1].Tag)
-					copyFile(filepath.Join(srcDir, "server.key"), privKeyPath)
-					copyFile(filepath.Join(srcDir, "server.pub"), pubKeyPath)
+				out.Info(fmt.Sprintf("Generating Curve25519 keypair for %s...", tunnelDomain))
+				pubKey, err := keys.GenerateDNSTTKeys(privKeyPath, pubKeyPath)
+				if err != nil {
+					return actions.NewError(actions.SystemInstall, "key generation failed", err)
 				}
 				tunnel.DNSTT = &config.DNSTTConfig{
-					MTU:        sharedDNSTT.MTU,
+					MTU:        config.DefaultMTU,
 					PrivateKey: privKeyPath,
-					PublicKey:  sharedDNSTT.PublicKey,
+					PublicKey:  pubKey,
 				}
+				out.Success(fmt.Sprintf("Public key (%s): %s", tunnelDomain, pubKey))
 
 			case config.TransportSlipstream:
 				certPath := filepath.Join(tunnelDir, "cert.pem")
 				keyPath := filepath.Join(tunnelDir, "key.pem")
 
-				if bIdx == 0 {
-					out.Info("Generating self-signed certificate...")
-					if err := certs.GenerateSelfSigned(certPath, keyPath, domain); err != nil {
-						return actions.NewError(actions.SystemInstall, "cert generation failed", err)
-					}
-					sharedSlipstream = &config.SlipstreamConfig{Cert: certPath, Key: keyPath}
-				} else if sharedSlipstream != nil {
-					srcDir := config.TunnelDir(allTunnels[len(allTunnels)-1].Tag)
-					copyFile(filepath.Join(srcDir, "cert.pem"), certPath)
-					copyFile(filepath.Join(srcDir, "key.pem"), keyPath)
+				out.Info(fmt.Sprintf("Generating certificate for %s...", tunnelDomain))
+				if err := certs.GenerateSelfSigned(certPath, keyPath, tunnelDomain); err != nil {
+					return actions.NewError(actions.SystemInstall, "cert generation failed", err)
 				}
 				tunnel.Slipstream = &config.SlipstreamConfig{Cert: certPath, Key: keyPath}
 
