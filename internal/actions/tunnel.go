@@ -11,7 +11,7 @@ func init() {
 			{Key: "tag", Label: "Tag (unique name)", Required: true},
 			{Key: "domain", Label: "Domain", Required: true},
 			{Key: "email", Label: "Email (for Let's Encrypt, NaiveProxy only)"},
-			{Key: "decoy-url", Label: "Decoy URL (NaiveProxy only)", Default: "https://www.wikipedia.org"},
+			{Key: "decoy-url", Label: "Decoy URL (NaiveProxy only)"},
 		},
 	})
 

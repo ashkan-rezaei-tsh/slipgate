@@ -239,7 +239,7 @@ func handleSystemInstall(ctx *actions.Context) error {
 					if err != nil {
 						return err
 					}
-					decoyURL, err := prompt.String("Decoy URL", "https://www.wikipedia.org")
+					decoyURL, err := prompt.String("Decoy URL", config.RandomDecoyURL())
 					if err != nil {
 						return err
 					}

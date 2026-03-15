@@ -118,7 +118,7 @@ func handleTunnelAdd(ctx *actions.Context) error {
 		decoyURL := ctx.GetArg("decoy-url")
 		if decoyURL == "" {
 			var err error
-			decoyURL, err = prompt.String("Decoy URL", "https://www.wikipedia.org")
+			decoyURL, err = prompt.String("Decoy URL", config.RandomDecoyURL())
 			if err != nil {
 				return err
 			}

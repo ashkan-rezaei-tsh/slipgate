@@ -63,7 +63,7 @@ func buildCaddyfile(tunnel *config.TunnelConfig) string {
 
 	decoy := naiveCfg.DecoyURL
 	if decoy == "" {
-		decoy = "https://www.wikipedia.org"
+		decoy = config.RandomDecoyURL()
 	}
 
 	port := naiveCfg.Port
