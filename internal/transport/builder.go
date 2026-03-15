@@ -11,9 +11,9 @@ import (
 func CreateService(tunnel *config.TunnelConfig, cfg *config.Config) error {
 	switch tunnel.Transport {
 	case config.TransportDNSTT:
-		return createDNSService(tunnel, cfg)
+		return createDNSTTService(tunnel, cfg)
 	case config.TransportSlipstream:
-		return createDNSService(tunnel, cfg)
+		return createSlipstreamService(tunnel, cfg)
 	case config.TransportNaive:
 		return createNaiveService(tunnel, cfg)
 	default:
@@ -21,16 +21,31 @@ func CreateService(tunnel *config.TunnelConfig, cfg *config.Config) error {
 	}
 }
 
-func createDNSService(tunnel *config.TunnelConfig, cfg *config.Config) error {
-	var execStart string
-	var err error
-
-	switch tunnel.Transport {
-	case config.TransportDNSTT:
-		execStart, err = buildDNSTTExecStart(tunnel, cfg)
-	case config.TransportSlipstream:
-		execStart, err = buildSlipstreamExecStart(tunnel, cfg)
+func createDNSTTService(tunnel *config.TunnelConfig, cfg *config.Config) error {
+	svc, err := buildDNSTTService(tunnel, cfg)
+	if err != nil {
+		return err
 	}
+
+	unit := &service.Unit{
+		Name:        service.TunnelServiceName(tunnel.Tag),
+		Description: fmt.Sprintf("SlipGate tunnel: %s (%s/%s)", tunnel.Tag, tunnel.Transport, tunnel.Backend),
+		ExecStart:   svc.execStart,
+		User:        "root",
+		Group:       config.SystemGroup,
+		After:       "network.target",
+		Restart:     "always",
+		Environment: svc.environment,
+	}
+
+	if err := service.Create(unit); err != nil {
+		return err
+	}
+	return service.Start(unit.Name)
+}
+
+func createSlipstreamService(tunnel *config.TunnelConfig, cfg *config.Config) error {
+	execStart, err := buildSlipstreamExecStart(tunnel, cfg)
 	if err != nil {
 		return err
 	}
