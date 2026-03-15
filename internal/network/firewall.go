@@ -2,6 +2,7 @@ package network
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 )
 
@@ -53,6 +54,35 @@ func firewalldAllow(port int, proto string) error {
 
 func iptablesAllow(port int, proto string) error {
 	return run("iptables", "-A", "INPUT", "-p", proto, "--dport", fmt.Sprintf("%d", port), "-j", "ACCEPT")
+}
+
+// DisableResolvedStub disables systemd-resolved's DNS stub listener on port 53
+// so that slipgate's DNS router can bind to it.
+func DisableResolvedStub() error {
+	// Check if systemd-resolved is running
+	if err := exec.Command("systemctl", "is-active", "systemd-resolved").Run(); err != nil {
+		return nil // not running, nothing to do
+	}
+
+	// Create drop-in config to disable stub listener
+	if err := os.MkdirAll("/etc/systemd/resolved.conf.d", 0755); err != nil {
+		return fmt.Errorf("create resolved conf dir: %w", err)
+	}
+
+	conf := "[Resolve]\nDNSStubListener=no\n"
+	if err := os.WriteFile("/etc/systemd/resolved.conf.d/slipgate-no-stub.conf", []byte(conf), 0644); err != nil {
+		return fmt.Errorf("write resolved config: %w", err)
+	}
+
+	// Restart systemd-resolved
+	if err := run("systemctl", "restart", "systemd-resolved"); err != nil {
+		return fmt.Errorf("restart systemd-resolved: %w", err)
+	}
+
+	// Fix /etc/resolv.conf to use real DNS (not the stub)
+	_ = os.WriteFile("/etc/resolv.conf", []byte("nameserver 8.8.8.8\nnameserver 1.1.1.1\n"), 0644)
+
+	return nil
 }
 
 func run(name string, args ...string) error {
