@@ -77,6 +77,13 @@ func GenerateURI(tunnel *config.TunnelConfig, backend *config.BackendConfig, cfg
 			fields[FNaivePort] = fmt.Sprintf("%d", tunnel.Naive.Port)
 			fields[FNaiveUser] = tunnel.Naive.User
 			fields[FNaivePass] = b64(tunnel.Naive.Password)
+			// Match server-side defaults from buildCaddyfile()
+			if fields[FNaiveUser] == "" {
+				fields[FNaiveUser] = "slipgate"
+			}
+			if tunnel.Naive.Password == "" {
+				fields[FNaivePass] = b64("slipgate")
+			}
 		}
 	}
 

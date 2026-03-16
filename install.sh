@@ -64,4 +64,4 @@ if ! "${INSTALL_DIR}/slipgate" install </dev/tty; then
     error "slipgate install failed — run 'sudo slipgate install' to retry"
 fi
 
-info "Done! Run 'sudo slipgate' to get started."
+info "Done! Run 'sudo slipgate' to see the menu."
