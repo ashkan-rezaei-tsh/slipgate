@@ -23,12 +23,12 @@ const (
 	binaryBaseURL  = "https://github.com/anonvector/slipgate/releases/latest/download"
 )
 
-// Binary download URLs per binary name. Arch is appended at runtime.
+// Binary download URLs — all hosted on slipgate releases.
 var binaryURLs = map[string]string{
-	"dnstt-server":      "https://github.com/anonvector/noizdns-deploy/releases/latest/download/dnstt-server-%s-%s",
-	"slipstream-server": "https://github.com/anonvector/slipstream-rust-deploy/releases/latest/download/slipstream-server-%s-%s",
-	"microsocks":        "https://github.com/anonvector/slipgate/releases/latest/download/microsocks-%s-%s",
-	"caddy-naive":       "https://github.com/anonvector/naiveproxy/releases/latest/download/caddy-naive-%s-%s",
+	"dnstt-server":      binaryBaseURL + "/dnstt-server-%s-%s",
+	"slipstream-server": binaryBaseURL + "/slipstream-server-%s-%s",
+	"microsocks":        binaryBaseURL + "/microsocks-%s-%s",
+	"caddy-naive":       binaryBaseURL + "/caddy-naive-%s-%s",
 }
 
 // EnsureInstalled checks if a binary exists, downloads if not.

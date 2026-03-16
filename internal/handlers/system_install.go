@@ -139,7 +139,7 @@ func handleSystemInstall(ctx *actions.Context) error {
 
 	// ── Step 5: Set up tunnels ─────────────────────────────────────
 	out.Print("")
-	out.Print("  ── Tunnel Setup ────────────────────────────────────")
+	out.Print("  ── DNSTT / NoizDNS / Slipstream / NaiveProxy Setup ─")
 	out.Print("")
 
 	// Backend (shared across all transports)
