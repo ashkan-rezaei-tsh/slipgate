@@ -28,7 +28,7 @@ func GenerateURI(tunnel *config.TunnelConfig, backend *config.BackendConfig, cfg
 	var fields [TotalFields]string
 
 	// Version and type
-	fields[FVersion] = "17"
+	fields[FVersion] = "18"
 	fields[FTunnelType] = GetTunnelType(tunnel.Transport, tunnel.Backend, opts.ClientMode)
 	fields[FName] = tunnel.Tag
 	fields[FDomain] = tunnel.Domain
@@ -58,6 +58,9 @@ func GenerateURI(tunnel *config.TunnelConfig, backend *config.BackendConfig, cfg
 	fields[FExpirationDate] = "0"
 	fields[FAllowSharing] = "0"
 	fields[FResolversHidden] = "0"
+	fields[FNoizDNSStealth] = "0"
+	fields[FDNSPayloadSize] = "0"
+	fields[FSOCKS5ServerPort] = "1080"
 
 	// Transport-specific
 	switch tunnel.Transport {

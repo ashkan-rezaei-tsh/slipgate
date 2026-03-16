@@ -43,7 +43,10 @@ const (
 	FBoundDeviceId      = 35 // ""
 	FResolversHidden    = 36 // "0" (v17)
 	FHiddenResolvers    = 37 // "" (v17)
-	TotalFields         = 38
+	FNoizDNSStealth     = 38 // "0" or "1" (v18)
+	FDNSPayloadSize     = 39 // integer (v18)
+	FSOCKS5ServerPort   = 40 // integer, default 1080 (v18)
+	TotalFields         = 41
 )
 
 // Client modes for DNSTT transport (server is the same, client behavior differs).
@@ -74,6 +77,16 @@ var TunnelTypeMap = map[string]map[string]map[string]string{
 		"": {
 			config.BackendSOCKS: "naive",
 			config.BackendSSH:   "naive_ssh",
+		},
+	},
+	config.TransportSSH: {
+		"": {
+			config.BackendSSH: "direct_ssh",
+		},
+	},
+	config.TransportSOCKS: {
+		"": {
+			config.BackendSOCKS: "direct_socks",
 		},
 	},
 }
