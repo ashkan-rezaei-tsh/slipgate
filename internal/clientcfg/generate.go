@@ -85,6 +85,10 @@ func GenerateURI(tunnel *config.TunnelConfig, backend *config.BackendConfig, cfg
 				fields[FNaivePass] = b64("slipgate")
 			}
 		}
+
+	case config.TransportSSH, config.TransportSOCKS:
+		// Direct transports have no domain — use server IP
+		fields[FDomain] = getServerIP()
 	}
 
 	// User credentials — always populate both SOCKS and SSH fields
