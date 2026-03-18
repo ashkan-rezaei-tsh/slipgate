@@ -40,4 +40,5 @@ func init() {
 	register(actions.SystemUsers, handleSystemUsers)
 	register(actions.ConfigExport, handleConfigExport)
 	register(actions.ConfigImport, handleConfigImport)
+	register(actions.TunnelScan, handleTunnelScan)
 }

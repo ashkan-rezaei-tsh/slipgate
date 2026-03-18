@@ -69,4 +69,11 @@ func init() {
 			{Key: "lines", Label: "Number of lines", Default: "50"},
 		},
 	})
+
+	Register(&Action{
+		ID:       TunnelScan,
+		Name:     "Scan Resolvers",
+		Category: "tunnel",
+		Inputs:   []InputField{},
+	})
 }

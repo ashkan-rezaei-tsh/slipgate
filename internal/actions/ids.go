@@ -25,4 +25,7 @@ const (
 	// Config actions
 	ConfigExport = "config.export"
 	ConfigImport = "config.import"
+
+	// Scanner actions
+	TunnelScan = "tunnel.scan"
 )

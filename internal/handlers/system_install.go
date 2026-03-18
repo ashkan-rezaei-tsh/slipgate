@@ -238,6 +238,7 @@ func handleSystemInstall(ctx *actions.Context) error {
 		}
 
 		var sharedNaive *config.NaiveConfig
+		var sharedDNSTTKey string // reuse same keypair for both backends
 
 			for bIdx, b := range backends {
 			tag := selectedTransport
@@ -287,17 +288,29 @@ func handleSystemInstall(ctx *actions.Context) error {
 				privKeyPath := filepath.Join(tunnelDir, "server.key")
 				pubKeyPath := filepath.Join(tunnelDir, "server.pub")
 
-				out.Info(fmt.Sprintf("Generating Curve25519 keypair for %s...", tunnelDomain))
-				pubKey, err := keys.GenerateDNSTTKeys(privKeyPath, pubKeyPath)
-				if err != nil {
-					return actions.NewError(actions.SystemInstall, "key generation failed", err)
+				if sharedDNSTTKey == "" {
+					out.Info(fmt.Sprintf("Generating Curve25519 keypair for %s...", tunnelDomain))
+					pubKey, err := keys.GenerateDNSTTKeys(privKeyPath, pubKeyPath)
+					if err != nil {
+						return actions.NewError(actions.SystemInstall, "key generation failed", err)
+					}
+					sharedDNSTTKey = pubKey
+					out.Success(fmt.Sprintf("Public key: %s", pubKey))
+				} else {
+					// Copy key files from the first tunnel
+					srcDir := config.TunnelDir(allTunnels[len(allTunnels)-1].Tag)
+					if err := copyFile(filepath.Join(srcDir, "server.key"), privKeyPath); err != nil {
+						return actions.NewError(actions.SystemInstall, "failed to copy private key", err)
+					}
+					if err := copyFile(filepath.Join(srcDir, "server.pub"), pubKeyPath); err != nil {
+						return actions.NewError(actions.SystemInstall, "failed to copy public key", err)
+					}
 				}
 				tunnel.DNSTT = &config.DNSTTConfig{
 					MTU:        mtu,
 					PrivateKey: privKeyPath,
-					PublicKey:  pubKey,
+					PublicKey:  sharedDNSTTKey,
 				}
-				out.Success(fmt.Sprintf("Public key (%s): %s", tunnelDomain, pubKey))
 
 			case config.TransportSlipstream:
 				certPath := filepath.Join(tunnelDir, "cert.pem")

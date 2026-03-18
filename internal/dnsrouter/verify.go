@@ -3,17 +3,12 @@ package dnsrouter
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/base32"
 	"encoding/binary"
-	"encoding/hex"
 	"log"
 	"net"
-	"strconv"
 	"strings"
 )
-
-// verifyPrefix is the first DNS label that triggers HMAC verification.
-// Designed to look like a CDN cache key lookup.
-const verifyPrefix = "_ck"
 
 // verifyRoute holds the pubkey and MTU for a domain's HMAC verification.
 type verifyRoute struct {
@@ -22,12 +17,19 @@ type verifyRoute struct {
 	mtu          int      // default response size (0 = no padding)
 }
 
-// handleVerify checks if packet is a _ck.* verification query and responds
-// with HMAC-SHA256(pubkey, nonce) padded to target size.
-// Query formats:
+// verifyEncoding is the lowercase base32 alphabet used for verify queries,
+// matching dnstt's subdomain encoding so probes are visually identical to
+// real tunnel traffic.
+var verifyEncoding = base32.NewEncoding("abcdefghijklmnopqrstuvwxyz234567").WithPadding(base32.NoPadding)
+
+// handleVerify detects and responds to HMAC verify probes.
 //
-//	_ck.<nonce-hex>.<domain>           → response padded to server MTU
-//	_ck.<size>.<nonce-hex>.<domain>    → response padded to requested size
+// Query format:  <base32(nonce[16] || HMAC(key,nonce)[:16])>.<tunnel-domain>
+// Response:      TXT containing base32(HMAC(key, nonce||0x01)) padded to MTU.
+//
+// The subdomain looks like any other base32-encoded dnstt/noizdns label.
+// The server only responds when the embedded HMAC proof is correct; all
+// other queries (real tunnel traffic, random probes) are forwarded normally.
 func (r *Router) handleVerify(packet []byte, clientAddr *net.UDPAddr) bool {
 	if len(packet) < 12 {
 		return false
@@ -51,7 +53,7 @@ func (r *Router) handleVerify(packet []byte, clientAddr *net.UDPAddr) bool {
 			break
 		}
 		if length >= 0xC0 {
-			return false // pointer in query — unexpected
+			return false
 		}
 		offset++
 		if offset+length > len(packet) {
@@ -61,7 +63,6 @@ func (r *Router) handleVerify(packet []byte, clientAddr *net.UDPAddr) bool {
 		offset += length
 	}
 
-	// Need QTYPE + QCLASS after name
 	if offset+4 > len(packet) {
 		return false
 	}
@@ -71,78 +72,77 @@ func (r *Router) handleVerify(packet []byte, clientAddr *net.UDPAddr) bool {
 	}
 	qEnd := offset + 4
 
-	// First label must be "_ck"
-	if len(labels) < 3 || labels[0] != verifyPrefix {
-		return false
-	}
-
-	// Find matching verify route by domain suffix
+	// Find a registered verify route matching the domain suffix
 	vr := r.findVerifyRoute(labels)
 	if vr == nil {
 		return false
 	}
 
 	dl := len(vr.domainLabels)
-	off := len(labels) - dl
-
-	// Check if second label is a size request (all digits)
-	targetSize := vr.mtu
-	nonceStart := 1
-	if off > 2 {
-		if size, err := strconv.Atoi(labels[1]); err == nil && size > 0 && size <= 4096 {
-			targetSize = size
-			nonceStart = 2
-		}
-	}
-
-	// Extract nonce hex (labels between prefix/size and domain)
-	nonceHex := strings.Join(labels[nonceStart:off], "")
-	nonceBytes, err := hex.DecodeString(nonceHex)
-	if err != nil || len(nonceBytes) == 0 {
+	if len(labels) <= dl {
 		return false
 	}
 
-	// Compute HMAC-SHA256(pubkey, nonce)
-	mac := hmac.New(sha256.New, vr.pubkey)
-	mac.Write(nonceBytes)
-	sig := mac.Sum(nil)
-	sigHex := hex.EncodeToString(sig)
+	// Concatenate all subdomain labels and base32-decode.
+	// nonce[16] || clientProof[16] encodes to exactly 52 base32 chars (no padding).
+	// Any other length means this is real tunnel traffic — forward normally.
+	encoded := strings.Join(labels[:len(labels)-dl], "")
+	decoded, err := verifyEncoding.DecodeString(encoded)
+	if err != nil || len(decoded) != 32 {
+		return false
+	}
 
-	// Build TXT content and pad to target size
-	txt := sigHex
-	if targetSize > 0 {
-		// Calculate DNS response overhead to determine TXT padding
+	nonce := decoded[:16]
+	clientProof := decoded[16:32]
+
+	// Verify client proof: HMAC-SHA256(key, nonce)[:16]
+	mac := hmac.New(sha256.New, vr.pubkey)
+	mac.Write(nonce)
+	expected := mac.Sum(nil)[:16]
+	if !hmac.Equal(clientProof, expected) {
+		return false // wrong key — forward to backend as normal tunnel traffic
+	}
+
+	// Valid probe. Compute response: HMAC-SHA256(key, nonce || 0x01)
+	// so the client can verify it's talking to the right server.
+	mac2 := hmac.New(sha256.New, vr.pubkey)
+	mac2.Write(nonce)
+	mac2.Write([]byte{0x01})
+	respBytes := mac2.Sum(nil) // 32 bytes → 52 base32 chars
+
+	respEncoded := verifyEncoding.EncodeToString(respBytes)
+
+	// Pad to MTU so the response matches real dnstt/slipstream response sizes.
+	if vr.mtu > 0 {
 		// Header(12) + Question(qEnd-12) + Answer pointer(2) + type(2) + class(2) + TTL(4) + rdlen(2) + txtlen(1) = 25
 		overhead := qEnd + 25
-		targetTXT := targetSize - overhead
-		if targetTXT > len(txt) {
-			txt = padResponse(txt, targetTXT)
+		targetTXT := vr.mtu - overhead
+		if targetTXT > len(respEncoded) {
+			respEncoded = padResponse(respEncoded, targetTXT)
 		}
 	}
 
-	// Build and send TXT response
-	resp := buildTXTResponse(packet, qEnd, txt)
+	resp := buildTXTResponse(packet, qEnd, respEncoded)
 	if _, err := r.conn.WriteToUDP(resp, clientAddr); err != nil {
 		log.Printf("verify: write: %v", err)
 	}
 	return true
 }
 
-// padResponse pads the HMAC hex with deterministic fill bytes to reach targetLen.
-func padResponse(hmacHex string, targetLen int) string {
-	if targetLen <= len(hmacHex) {
-		return hmacHex
+// padResponse pads txt with deterministic fill bytes to reach targetLen.
+func padResponse(txt string, targetLen int) string {
+	if targetLen <= len(txt) {
+		return txt
 	}
-	// Pad with repeating hex chars derived from HMAC (deterministic, looks like cache data)
 	var b strings.Builder
-	b.WriteString(hmacHex)
+	b.WriteString(txt)
 	for b.Len() < targetLen {
-		b.WriteByte(hmacHex[b.Len()%len(hmacHex)])
+		b.WriteByte(txt[b.Len()%len(txt)])
 	}
 	return b.String()[:targetLen]
 }
 
-// findVerifyRoute finds a verify route matching the domain suffix of the labels.
+// findVerifyRoute returns the verify route whose domain suffix matches labels.
 func (r *Router) findVerifyRoute(labels []string) *verifyRoute {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -150,7 +150,7 @@ func (r *Router) findVerifyRoute(labels []string) *verifyRoute {
 	for i := range r.verifyRoutes {
 		vr := &r.verifyRoutes[i]
 		dl := len(vr.domainLabels)
-		if len(labels) < 2+dl {
+		if len(labels) < 1+dl { // need at least 1 subdomain label
 			continue
 		}
 		off := len(labels) - dl
@@ -174,20 +174,20 @@ func buildTXTResponse(query []byte, qEnd int, txt string) []byte {
 	var resp []byte
 
 	// Header
-	resp = append(resp, query[0], query[1])              // Transaction ID
-	resp = append(resp, 0x84|(query[2]&0x01), 0x00)      // QR=1, AA=1, RD=copy
-	resp = append(resp, 0x00, 0x01)                      // QDCOUNT = 1
-	resp = append(resp, 0x00, 0x01)                      // ANCOUNT = 1
-	resp = append(resp, 0x00, 0x00)                      // NSCOUNT = 0
-	resp = append(resp, 0x00, 0x00)                      // ARCOUNT = 0
+	resp = append(resp, query[0], query[1])         // Transaction ID
+	resp = append(resp, 0x84|(query[2]&0x01), 0x00) // QR=1, AA=1, RD=copy
+	resp = append(resp, 0x00, 0x01)                 // QDCOUNT = 1
+	resp = append(resp, 0x00, 0x01)                 // ANCOUNT = 1
+	resp = append(resp, 0x00, 0x00)                 // NSCOUNT = 0
+	resp = append(resp, 0x00, 0x00)                 // ARCOUNT = 0
 
 	// Question section (copy from query)
 	resp = append(resp, query[12:qEnd]...)
 
 	// Answer: name pointer + TXT RR
-	resp = append(resp, 0xC0, 0x0C) // name pointer to offset 12
-	resp = append(resp, 0x00, 0x10) // TYPE = TXT
-	resp = append(resp, 0x00, 0x01) // CLASS = IN
+	resp = append(resp, 0xC0, 0x0C)              // name pointer to offset 12
+	resp = append(resp, 0x00, 0x10)              // TYPE = TXT
+	resp = append(resp, 0x00, 0x01)              // CLASS = IN
 	resp = append(resp, 0x00, 0x01, 0x51, 0x80) // TTL = 86400
 
 	// Build RDATA with character-strings (max 255 bytes each)

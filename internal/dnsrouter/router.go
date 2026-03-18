@@ -96,7 +96,7 @@ func (r *Router) ListenAndServe() error {
 }
 
 func (r *Router) handleQuery(packet []byte, clientAddr *net.UDPAddr) {
-	// Check for HMAC verification query (nzv.* TXT) first
+	// Check for HMAC verification query (_ck.* TXT) first
 	if r.handleVerify(packet, clientAddr) {
 		return
 	}

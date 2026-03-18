@@ -126,6 +126,7 @@ func tunnelMenu(cfg *config.Config) error {
 	fmt.Println("  5) Stop tunnel")
 	fmt.Println("  6) View logs")
 	fmt.Println("  7) Remove tunnel")
+	fmt.Println("  8) Scan resolvers")
 	fmt.Println("  0) Back")
 	fmt.Print("\n  Choice: ")
 
@@ -149,6 +150,12 @@ func tunnelMenu(cfg *config.Config) error {
 		return runAction(actions.TunnelLogs, cfg)
 	case "7":
 		return runAction(actions.TunnelRemove, cfg)
+	case "8":
+		err := runAction(actions.TunnelScan, cfg)
+		if err != nil {
+			return err
+		}
+		waitForEnter()
 	}
 	return nil
 }
