@@ -110,7 +110,7 @@ func handleSystemUpdate(ctx *actions.Context) error {
 	cfg := ctx.Config.(*config.Config)
 	for _, t := range cfg.Tunnels {
 		svcName := service.TunnelServiceName(t.Tag)
-		if status, _ := service.Status(svcName); status != "" {
+		if status, _ := service.Status(svcName); status == "active" {
 			if err := service.Restart(svcName); err != nil {
 				out.Warning(fmt.Sprintf("Failed to restart %s: %v", svcName, err))
 			} else {
@@ -119,7 +119,7 @@ func handleSystemUpdate(ctx *actions.Context) error {
 		}
 	}
 	for _, svc := range []string{"slipgate-dnsrouter", "slipgate-socks5"} {
-		if status, _ := service.Status(svc); status != "" {
+		if status, _ := service.Status(svc); status == "active" {
 			if err := service.Restart(svc); err != nil {
 				out.Warning(fmt.Sprintf("Failed to restart %s: %v", svc, err))
 			} else {
