@@ -134,8 +134,9 @@ func handleSystemInstall(ctx *actions.Context) error {
 	}
 	if needsWireguard {
 		out.Info("Installing WireGuard...")
-		if err := transport.EnsureWireguardInstalled(); err != nil {
-			out.Warning("Failed to install WireGuard: " + err.Error())
+		if !transport.EnsureWireguardInstalled() {
+			out.Warning("WireGuard not available — skipping. Install manually: apt install wireguard-tools")
+			needsWireguard = false
 		} else {
 			out.Success("WireGuard installed")
 		}
@@ -157,23 +158,35 @@ func handleSystemInstall(ctx *actions.Context) error {
 	out.Success("Dependencies installed!")
 
 	// ── Step 5: Set up tunnels ─────────────────────────────────────
-	out.Print("")
-	out.Print("  ── DNSTT / NoizDNS / Slipstream / NaiveProxy Setup ─")
-	out.Print("")
-
-	// Backend (shared across all transports)
-	backend, err := prompt.Select("Backend", actions.BackendOptions)
-	if err != nil {
-		return err
-	}
-
-	backends := []string{backend}
-	if backend == "both" {
-		backends = []string{config.BackendSOCKS, config.BackendSSH}
-	}
-
 	var allTunnels []config.TunnelConfig
 	setupSOCKS := false
+
+	// Check if any selected transport needs a backend prompt
+	needsBackend := false
+	for _, t := range transports {
+		if t != config.TransportSSH && t != config.TransportSOCKS && t != config.TransportWireguard {
+			needsBackend = true
+			break
+		}
+	}
+
+	backend := ""
+	var backends []string
+	if needsBackend {
+		out.Print("")
+		out.Print("  ── Tunnel Setup ────────────────────────────────────")
+		out.Print("")
+
+		var err error
+		backend, err = prompt.Select("Backend", actions.BackendOptions)
+		if err != nil {
+			return err
+		}
+		backends = []string{backend}
+		if backend == "both" {
+			backends = []string{config.BackendSOCKS, config.BackendSSH}
+		}
+	}
 
 	// Walk through each installed transport
 	for tIdx, selectedTransport := range transports {

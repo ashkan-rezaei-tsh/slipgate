@@ -193,9 +193,8 @@ func addSingleTunnel(ctx *actions.Context, cfg *config.Config, transport_, backe
 		}
 
 	case config.TransportWireguard:
-		out.Info("Installing WireGuard...")
-		if err := transport.EnsureWireguardInstalled(); err != nil {
-			return actions.NewError(actions.TunnelAdd, "failed to install WireGuard", err)
+		if !transport.EnsureWireguardInstalled() {
+			return actions.NewError(actions.TunnelAdd, "WireGuard not available — install manually: apt install wireguard-tools", nil)
 		}
 
 		out.Info("Enabling IP forwarding...")

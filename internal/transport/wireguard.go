@@ -24,42 +24,28 @@ PublicKey = {{ .ClientPubKey }}
 AllowedIPs = {{ .ClientAddress }}
 `
 
-// EnsureWireguardInstalled checks if WireGuard tools are available, installs if not.
-func EnsureWireguardInstalled() error {
+// EnsureWireguardInstalled checks if WireGuard tools are available, tries to install if not.
+// Returns true if wg is available, false if not (caller should skip WireGuard setup).
+func EnsureWireguardInstalled() bool {
 	if _, err := exec.LookPath("wg"); err == nil {
-		return nil // already installed
+		return true
 	}
 
-	// Detect distro and install
+	// Try to install
 	if data, err := os.ReadFile("/etc/os-release"); err == nil {
 		s := string(data)
 		switch {
 		case strings.Contains(s, "ubuntu") || strings.Contains(s, "debian") || strings.Contains(s, "Ubuntu") || strings.Contains(s, "Debian"):
-			// Ensure wireguard is available in apt sources
 			_ = exec.Command("apt-get", "update", "-qq").Run()
-			cmd := exec.Command("apt-get", "install", "-y", "wireguard-tools")
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			if err := cmd.Run(); err != nil {
-				// Fallback: try adding the PPA for older Ubuntu
-				_ = exec.Command("apt-get", "install", "-y", "software-properties-common").Run()
-				_ = exec.Command("add-apt-repository", "-y", "ppa:wireguard/wireguard").Run()
-				_ = exec.Command("apt-get", "update", "-qq").Run()
-				cmd2 := exec.Command("apt-get", "install", "-y", "wireguard-tools")
-				cmd2.Stdout = os.Stdout
-				cmd2.Stderr = os.Stderr
-				return cmd2.Run()
-			}
-			return nil
+			_ = exec.Command("apt-get", "install", "-y", "wireguard-tools").Run()
 		case strings.Contains(s, "centos") || strings.Contains(s, "rhel") || strings.Contains(s, "fedora"):
-			cmd := exec.Command("yum", "install", "-y", "wireguard-tools")
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			return cmd.Run()
+			_ = exec.Command("yum", "install", "-y", "wireguard-tools").Run()
 		}
 	}
 
-	return fmt.Errorf("cannot auto-install WireGuard: unsupported distro. Install manually: apt install wireguard")
+	// Check again
+	_, err := exec.LookPath("wg")
+	return err == nil
 }
 
 // GenerateWireguardKeys generates a WireGuard keypair and returns (privateKey, publicKey).
