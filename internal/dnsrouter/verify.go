@@ -116,26 +116,10 @@ func (r *Router) handleVerify(packet []byte, clientAddr *net.UDPAddr) bool {
 
 	respEncoded := verifyEncoding.EncodeToString(respBytes)
 
-	// Pad response to match real dnstt/noizdns tunnel response sizes.
-	// Use EDNS0 OPT record so resolvers know we support large UDP responses
-	// (without EDNS0, resolvers truncate at 512 bytes and drop the payload).
-	ednsPayloadSize := 1232 // dnsflagday standard
-	if vr.mtu > 0 {
-		// Account for: Header(12) + Question(qEnd-12) + Answer overhead(14) + EDNS0 OPT(11)
-		overhead := qEnd + 14 + 11
-		targetTXT := vr.mtu - overhead
-		if targetTXT < 52 {
-			targetTXT = 52
-		}
-		if targetTXT > len(respEncoded) {
-			respEncoded = padResponse(respEncoded, targetTXT)
-		}
-		if vr.mtu > ednsPayloadSize {
-			ednsPayloadSize = vr.mtu
-		}
-	}
-
-	resp := buildTXTResponseWithEDNS(packet, qEnd, respEncoded, ednsPayloadSize)
+	// Build response with EDNS0 OPT record.
+	// No padding for now — just the 52-char HMAC. Padding to MTU can cause
+	// resolvers to drop the answer section when the response is too large.
+	resp := buildTXTResponseWithEDNS(packet, qEnd, respEncoded, 1232)
 	if _, err := r.conn.WriteToUDP(resp, clientAddr); err != nil {
 		log.Printf("verify: write: %v", err)
 	}
