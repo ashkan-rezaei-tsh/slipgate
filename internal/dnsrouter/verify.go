@@ -116,10 +116,24 @@ func (r *Router) handleVerify(packet []byte, clientAddr *net.UDPAddr) bool {
 	mac2.Write([]byte{0x01})
 	respHMAC := mac2.Sum(nil) // 32 bytes
 
-	// Build raw binary TXT payload: 32-byte HMAC + random binary padding.
-	// Randomize around the tunnel's MTU to match natural dnstt variation
+	// Determine response padding target.
+	// The desired response size is encoded in nonce[14:16] (big-endian uint16)
+	// by the client, so it survives resolver EDNS0 rewriting. Values in the
+	// range [200, 4096] are treated as an explicit request; anything else
+	// (including random bytes from old clients) falls back to EDNS0 / vr.mtu.
+	mtu := vr.mtu
+	if mtu == 0 {
+		mtu = 1232
+	}
+	if desiredSize := int(binary.BigEndian.Uint16(nonce[14:16])); desiredSize >= 200 && desiredSize <= 4096 {
+		mtu = desiredSize
+	} else if clientEDNS := parseEDNS0PayloadSize(packet, qEnd); clientEDNS > 0 && clientEDNS != 1232 {
+		mtu = clientEDNS
+	}
+
+	// Randomize around the target to match natural dnstt variation
 	// (real responses vary based on how much tunnel data is available).
-	targetTotal := vr.mtu - randInt(vr.mtu/4) // 75%-100% of MTU
+	targetTotal := mtu - randInt(mtu/4) // 75%-100% of target
 	if targetTotal < 200 {
 		targetTotal = 200
 	}
@@ -219,6 +233,66 @@ func buildBinaryTXTResponseWithEDNS(query []byte, qEnd int, data []byte, ednsPay
 	resp = append(resp, 0x00, 0x00)                                             // RDLENGTH: 0
 
 	return resp
+}
+
+// parseEDNS0PayloadSize scans the additional section of a DNS query for an
+// OPT (type 41) pseudo-RR and returns the advertised UDP payload size.
+// Returns 0 if no EDNS0 OPT record is found.
+func parseEDNS0PayloadSize(packet []byte, qEnd int) int {
+	if len(packet) < 12 {
+		return 0
+	}
+	arCount := int(binary.BigEndian.Uint16(packet[10:12]))
+	if arCount == 0 {
+		return 0
+	}
+	// Skip answer and authority sections
+	anCount := int(binary.BigEndian.Uint16(packet[6:8]))
+	nsCount := int(binary.BigEndian.Uint16(packet[8:10]))
+	offset := qEnd
+	for i := 0; i < anCount+nsCount; i++ {
+		offset = skipName(packet, offset)
+		if offset < 0 || offset+10 > len(packet) {
+			return 0
+		}
+		rdLen := int(binary.BigEndian.Uint16(packet[offset+8 : offset+10]))
+		offset += 10 + rdLen
+		if offset > len(packet) {
+			return 0
+		}
+	}
+	// Scan additional section for OPT (type 41)
+	for i := 0; i < arCount; i++ {
+		offset = skipName(packet, offset)
+		if offset < 0 || offset+10 > len(packet) {
+			return 0
+		}
+		rrType := binary.BigEndian.Uint16(packet[offset : offset+2])
+		if rrType == 41 { // OPT
+			return int(binary.BigEndian.Uint16(packet[offset+2 : offset+4])) // CLASS = UDP payload size
+		}
+		rdLen := int(binary.BigEndian.Uint16(packet[offset+8 : offset+10]))
+		offset += 10 + rdLen
+		if offset > len(packet) {
+			return 0
+		}
+	}
+	return 0
+}
+
+// skipName advances past a DNS name (handles both labels and pointers).
+func skipName(packet []byte, offset int) int {
+	for offset < len(packet) {
+		length := int(packet[offset])
+		if length == 0 {
+			return offset + 1
+		}
+		if length >= 0xC0 { // pointer
+			return offset + 2
+		}
+		offset += 1 + length
+	}
+	return -1
 }
 
 // randInt returns a random int in [0, n).
