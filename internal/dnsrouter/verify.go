@@ -117,9 +117,9 @@ func (r *Router) handleVerify(packet []byte, clientAddr *net.UDPAddr) bool {
 	respHMAC := mac2.Sum(nil) // 32 bytes
 
 	// Build raw binary TXT payload: 32-byte HMAC + random binary padding.
-	// Pad to the tunnel's configured MTU so the response matches what
-	// dnstt-server would produce at full capacity.
-	targetTotal := vr.mtu
+	// Randomize around the tunnel's MTU to match natural dnstt variation
+	// (real responses vary based on how much tunnel data is available).
+	targetTotal := vr.mtu - randInt(vr.mtu/4) // 75%-100% of MTU
 	if targetTotal < 200 {
 		targetTotal = 200
 	}
