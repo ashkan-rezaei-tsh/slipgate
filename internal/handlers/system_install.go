@@ -251,13 +251,9 @@ func handleSystemInstall(ctx *actions.Context) error {
 					if selectedTransport == config.TransportSlipstream {
 						sshHint = "ss." + parentDomain
 					}
-					sshDomain, err := prompt.String(fmt.Sprintf("Domain for %s (e.g. %s)", tag, sshHint), "")
+					sshDomain, err := prompt.String(fmt.Sprintf("Domain for %s", tag), sshHint)
 					if err != nil {
 						return err
-					}
-					if sshDomain == "" {
-						out.Warning(fmt.Sprintf("Skipping %s (no domain)", tag))
-						continue
 					}
 					tunnelDomain = sshDomain
 				}

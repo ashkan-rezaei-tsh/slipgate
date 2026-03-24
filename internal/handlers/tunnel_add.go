@@ -82,13 +82,9 @@ func handleTunnelAdd(ctx *actions.Context) error {
 				if transport_ == config.TransportSlipstream {
 					sshHint = "ss." + parentDomain
 				}
-				sshDomain, err := prompt.String(fmt.Sprintf("Domain for %s (e.g. %s)", tunnelTag, sshHint), "")
+				sshDomain, err := prompt.String(fmt.Sprintf("Domain for %s", tunnelTag), sshHint)
 				if err != nil {
 					return err
-				}
-				if sshDomain == "" {
-					out.Warning(fmt.Sprintf("Skipping %s (no domain)", tunnelTag))
-					continue
 				}
 				tunnelDomain = sshDomain
 			}

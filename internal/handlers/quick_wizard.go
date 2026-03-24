@@ -183,13 +183,9 @@ func handleQuickWizard(ctx *actions.Context) error {
 				if selectedTransport == config.TransportSlipstream {
 					sshHint = "ss." + parentDomain
 				}
-				tunnelDomain, err = prompt.String(fmt.Sprintf("Domain for %s (e.g. %s)", tag, sshHint), "")
+				tunnelDomain, err = prompt.String(fmt.Sprintf("Domain for %s", tag), sshHint)
 				if err != nil {
 					return err
-				}
-				if tunnelDomain == "" {
-					out.Warning(fmt.Sprintf("Skipping %s (no domain)", tag))
-					continue
 				}
 			}
 		}
