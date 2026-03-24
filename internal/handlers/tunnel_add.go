@@ -77,7 +77,11 @@ func handleTunnelAdd(ctx *actions.Context) error {
 			tunnelTag = tag + "-" + b
 			// SSH backend needs its own subdomain for DNS tunnels
 			if b == config.BackendSSH && transport_ != config.TransportNaive {
-				sshDomain, err := prompt.String(fmt.Sprintf("Domain for %s backend (SSH)", tunnelTag), "")
+				sshHint := "ts.example.com"
+				if transport_ == config.TransportSlipstream {
+					sshHint = "ss.example.com"
+				}
+				sshDomain, err := prompt.String(fmt.Sprintf("Domain for %s (e.g. %s)", tunnelTag, sshHint), "")
 				if err != nil {
 					return err
 				}
