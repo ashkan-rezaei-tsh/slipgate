@@ -245,13 +245,17 @@ func handleSystemInstall(ctx *actions.Context) error {
 			if backend == "both" {
 				tag = selectedTransport + "-" + b
 				// SSH backend needs its own subdomain (separate dnstt/slipstream instance)
-				// e.g. t.example.com → ts.example.com
 				if b == config.BackendSSH && selectedTransport != config.TransportNaive {
-					parts := splitDomain(domain)
-					if len(parts) >= 2 {
-						parts[0] = parts[0] + "s"
-						tunnelDomain = joinDomain(parts)
+					parentDomain := baseDomain(domain)
+					sshHint := "ts." + parentDomain
+					if selectedTransport == config.TransportSlipstream {
+						sshHint = "ss." + parentDomain
 					}
+					sshDomain, err := prompt.String(fmt.Sprintf("Domain for %s", tag), sshHint)
+					if err != nil {
+						return err
+					}
+					tunnelDomain = sshDomain
 				}
 			}
 
@@ -380,6 +384,10 @@ func handleSystemInstall(ctx *actions.Context) error {
 
 	// Create and start systemd services
 	for i := range allTunnels {
+		// Free the port in case a stale process is holding it
+		if allTunnels[i].IsDNSTunnel() && allTunnels[i].Port > 0 {
+			network.FreePort(allTunnels[i].Port, "udp")
+		}
 		out.Info(fmt.Sprintf("Creating service for %q...", allTunnels[i].Tag))
 		if err := transport.CreateService(&allTunnels[i], cfg); err != nil {
 			return actions.NewError(actions.SystemInstall, fmt.Sprintf("failed to create service for %s", allTunnels[i].Tag), err)
@@ -387,14 +395,14 @@ func handleSystemInstall(ctx *actions.Context) error {
 		out.Success(fmt.Sprintf("Tunnel %q started", allTunnels[i].Tag))
 	}
 
-	// Start DNS router whenever there are DNS tunnels (single or multi mode).
-	// dnstt-server and slipstream-server always bind to internal ports (5310+),
-	// so the DNS router must always be running to forward port 53 traffic.
+	// Start DNS router to forward port 53 to internal tunnel ports.
+	// Also handles HMAC verification probes for the scanner.
 	if dnsTunnelCount > 0 {
+		network.FreePort(53, "udp")
 		out.Info("Starting DNS router...")
 		if err := dnsrouter.CreateRouterService(); err != nil {
 			out.Warning("Failed to create DNS router service: " + err.Error())
-		} else if err := dnsrouter.StartRouterService(); err != nil {
+		} else if err := dnsrouter.RestartRouterService(); err != nil {
 			out.Warning("Failed to start DNS router: " + err.Error())
 		} else {
 			out.Success("DNS router started on 0.0.0.0:53")
@@ -465,7 +473,10 @@ func handleSystemInstall(ctx *actions.Context) error {
 		}
 	}
 
-	// Setup SOCKS5 proxy AFTER user creation so auth is configured from the start
+	// Kill anything holding port 1080 before starting our SOCKS5 proxy
+	if setupSOCKS {
+		network.FreePort(1080, "tcp")
+	}
 	if setupSOCKS {
 		if directSOCKS {
 			// Direct SOCKS5 transport: listen on all interfaces
@@ -529,39 +540,46 @@ func handleSystemInstall(ctx *actions.Context) error {
 	out.Print("")
 
 	// Show slipnet:// configs
-	if len(cfg.Users) > 0 {
-		out.Print("    Client Configs:")
-		out.Print("")
-		for _, u := range cfg.Users {
-			for _, t := range allTunnels {
-				backendCfg := cfg.GetBackend(t.Backend)
-				if backendCfg == nil {
+	out.Print("    Client Configs:")
+	out.Print("")
+	users := cfg.Users
+	if len(users) == 0 {
+		// Show configs without credentials when no user was created
+		users = []config.UserConfig{{}}
+	}
+	for _, u := range users {
+		for _, t := range allTunnels {
+			backendCfg := cfg.GetBackend(t.Backend)
+			if backendCfg == nil {
+				continue
+			}
+
+			modes := []string{""}
+			if t.Transport == config.TransportDNSTT {
+				modes = []string{clientcfg.ClientModeDNSTT, clientcfg.ClientModeNoizDNS}
+			}
+
+			for _, mode := range modes {
+				opts := clientcfg.URIOptions{
+					ClientMode: mode,
+					Username:   u.Username,
+					Password:   u.Password,
+				}
+				uri, err := clientcfg.GenerateURI(&t, backendCfg, cfg, opts)
+				if err != nil {
 					continue
 				}
-
-				modes := []string{""}
-				if t.Transport == config.TransportDNSTT {
-					modes = []string{clientcfg.ClientModeDNSTT, clientcfg.ClientModeNoizDNS}
+				label := t.Tag
+				if mode == clientcfg.ClientModeNoizDNS {
+					label = strings.ReplaceAll(label, "dnstt", "noizdns")
 				}
-
-				for _, mode := range modes {
-					opts := clientcfg.URIOptions{
-						ClientMode: mode,
-						Username:   u.Username,
-						Password:   u.Password,
-					}
-					uri, err := clientcfg.GenerateURI(&t, backendCfg, cfg, opts)
-					if err != nil {
-						continue
-					}
-					label := t.Tag
-					if mode == clientcfg.ClientModeNoizDNS {
-						label = strings.ReplaceAll(label, "dnstt", "noizdns")
-					}
+				if u.Username != "" {
 					out.Print(fmt.Sprintf("    [%s] %s", label, u.Username))
-					out.Print(fmt.Sprintf("    %s", uri))
-					out.Print("")
+				} else {
+					out.Print(fmt.Sprintf("    [%s] (no auth)", label))
 				}
+				out.Print(fmt.Sprintf("    %s", uri))
+				out.Print("")
 			}
 		}
 	}

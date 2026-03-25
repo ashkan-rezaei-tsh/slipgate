@@ -2,6 +2,7 @@ package dnsrouter
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
@@ -23,6 +24,22 @@ type Router struct {
 	defaultDst   string
 	mu           sync.RWMutex
 	conn         *net.UDPConn
+
+	// Persistent backend connections and pending query tracking
+	backends    map[string]*backendConn
+	backendsMu  sync.Mutex
+}
+
+// backendConn is a persistent UDP connection to a backend (dnstt-server).
+type backendConn struct {
+	conn    *net.UDPConn
+	pending sync.Map // txID (uint16) → *pendingQuery
+}
+
+// pendingQuery tracks a forwarded query so the response can be routed back.
+type pendingQuery struct {
+	clientAddr *net.UDPAddr
+	timestamp  time.Time
 }
 
 // New creates a new DNS router.
@@ -30,6 +47,7 @@ func New(listenAddr string) *Router {
 	return &Router{
 		listenAddr: listenAddr,
 		routes:     make(map[string]string),
+		backends:   make(map[string]*backendConn),
 	}
 }
 
@@ -45,8 +63,6 @@ func (r *Router) AddRoute(domain, backend string) {
 }
 
 // AddVerifyRoute registers a domain's public key and MTU for HMAC verification.
-// When the router receives a _ck.<nonce>.<domain> TXT query, it responds
-// with HMAC-SHA256(pubkey, nonce) and the MTU value.
 func (r *Router) AddVerifyRoute(domain string, pubkey []byte, mtu int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -108,27 +124,108 @@ func (r *Router) handleQuery(packet []byte, clientAddr *net.UDPAddr) {
 		return
 	}
 
-	log.Printf("query: %s from %s", domain, clientAddr)
-
 	// Find matching backend
 	r.mu.RLock()
 	backend := r.findBackend(domain)
 	r.mu.RUnlock()
 
 	if backend == "" {
-		log.Printf("no route for %s", domain)
 		return
 	}
 
-	// Forward to backend
-	resp, err := forward(packet, backend)
+	// Forward via persistent backend connection
+	bc, err := r.getBackend(backend)
 	if err != nil {
-		log.Printf("forward to %s: %v", backend, err)
+		log.Printf("backend %s: %v", backend, err)
 		return
 	}
 
-	// Send response back to client
-	r.conn.WriteToUDP(resp, clientAddr)
+	if len(packet) < 2 {
+		return
+	}
+	txID := binary.BigEndian.Uint16(packet[:2])
+
+	// Store pending query so response reader can route it back
+	bc.pending.Store(txID, &pendingQuery{
+		clientAddr: clientAddr,
+		timestamp:  time.Now(),
+	})
+
+	if _, err := bc.conn.Write(packet); err != nil {
+		bc.pending.Delete(txID)
+		log.Printf("write to %s: %v", backend, err)
+	}
+}
+
+// getBackend returns a persistent connection to the backend, creating one if needed.
+func (r *Router) getBackend(addr string) (*backendConn, error) {
+	r.backendsMu.Lock()
+	defer r.backendsMu.Unlock()
+
+	if bc, ok := r.backends[addr]; ok {
+		return bc, nil
+	}
+
+	udpAddr, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := net.DialUDP("udp", nil, udpAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	bc := &backendConn{conn: conn}
+	r.backends[addr] = bc
+
+	// Start response reader goroutine
+	go r.readBackendResponses(bc, addr)
+
+	// Start stale query cleanup
+	go r.cleanPending(bc)
+
+	return bc, nil
+}
+
+// readBackendResponses reads responses from a backend and routes them to clients.
+func (r *Router) readBackendResponses(bc *backendConn, addr string) {
+	buf := make([]byte, 4096)
+	for {
+		n, err := bc.conn.Read(buf)
+		if err != nil {
+			log.Printf("read from %s: %v", addr, err)
+			return
+		}
+		if n < 2 {
+			continue
+		}
+
+		txID := binary.BigEndian.Uint16(buf[:2])
+		val, ok := bc.pending.LoadAndDelete(txID)
+		if !ok {
+			continue // no matching query (stale or duplicate)
+		}
+
+		pq := val.(*pendingQuery)
+		r.conn.WriteToUDP(buf[:n], pq.clientAddr)
+	}
+}
+
+// cleanPending removes stale pending queries every 30 seconds.
+func (r *Router) cleanPending(bc *backendConn) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		now := time.Now()
+		bc.pending.Range(func(key, value any) bool {
+			pq := value.(*pendingQuery)
+			if now.Sub(pq.timestamp) > 10*time.Second {
+				bc.pending.Delete(key)
+			}
+			return true
+		})
+	}
 }
 
 func (r *Router) findBackend(domain string) string {
@@ -150,33 +247,6 @@ func (r *Router) findBackend(domain string) string {
 	}
 
 	return r.defaultDst
-}
-
-func forward(packet []byte, backend string) ([]byte, error) {
-	addr, err := net.ResolveUDPAddr("udp", backend)
-	if err != nil {
-		return nil, err
-	}
-
-	conn, err := net.DialUDP("udp", nil, addr)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
-	conn.SetDeadline(time.Now().Add(10 * time.Second))
-
-	if _, err := conn.Write(packet); err != nil {
-		return nil, err
-	}
-
-	buf := make([]byte, 4096)
-	n, err := conn.Read(buf)
-	if err != nil {
-		return nil, err
-	}
-
-	return buf[:n], nil
 }
 
 // Serve loads config and starts the DNS router.
@@ -235,8 +305,7 @@ func Serve(cfgInterface interface{}) error {
 	return r.ListenAndServe()
 }
 
-// certToHMACKey derives a 32-byte HMAC key from a PEM certificate file
-// by computing SHA-256 of the DER-encoded certificate.
+// certToHMACKey derives a 32-byte HMAC key from a PEM certificate file.
 func certToHMACKey(certPath string) ([]byte, error) {
 	data, err := os.ReadFile(certPath)
 	if err != nil {
@@ -250,8 +319,7 @@ func certToHMACKey(certPath string) ([]byte, error) {
 	return hash[:], nil
 }
 
-// loadPubkey loads a hex-encoded public key. If the value looks like a file
-// path, it reads the file; otherwise it decodes the hex string directly.
+// loadPubkey loads a hex-encoded public key.
 func loadPubkey(pubkeyOrPath string) ([]byte, error) {
 	hexStr := pubkeyOrPath
 	if _, err := os.Stat(pubkeyOrPath); err == nil {

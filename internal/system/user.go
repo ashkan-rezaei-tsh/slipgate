@@ -87,8 +87,10 @@ func AddSSHUser(username, password string) error {
 	return ensureSSHMatchGroup()
 }
 
-// RemoveSSHUser removes a user from the system.
+// RemoveSSHUser kills active sessions and removes a user from the system.
 func RemoveSSHUser(username string) error {
+	// Kill all processes owned by the user to disconnect active SSH sessions
+	_ = run("pkill", "-u", username)
 	return run("userdel", username)
 }
 

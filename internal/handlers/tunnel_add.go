@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/anonvector/slipgate/internal/actions"
 	"github.com/anonvector/slipgate/internal/certs"
 	"github.com/anonvector/slipgate/internal/config"
 	"github.com/anonvector/slipgate/internal/keys"
+	"github.com/anonvector/slipgate/internal/network"
 	"github.com/anonvector/slipgate/internal/prompt"
 	"github.com/anonvector/slipgate/internal/router"
 	"github.com/anonvector/slipgate/internal/transport"
@@ -77,12 +77,17 @@ func handleTunnelAdd(ctx *actions.Context) error {
 		if backend == "both" {
 			tunnelTag = tag + "-" + b
 			// SSH backend needs its own subdomain for DNS tunnels
-			// e.g. t.example.com → ts.example.com
 			if b == config.BackendSSH && transport_ != config.TransportNaive {
-				parts := strings.SplitN(tunnelDomain, ".", 2)
-				if len(parts) == 2 {
-					tunnelDomain = parts[0] + "s." + parts[1]
+				parentDomain := baseDomain(domain)
+				sshHint := "ts." + parentDomain
+				if transport_ == config.TransportSlipstream {
+					sshHint = "ss." + parentDomain
 				}
+				sshDomain, err := prompt.String(fmt.Sprintf("Domain for %s", tunnelTag), sshHint)
+				if err != nil {
+					return err
+				}
+				tunnelDomain = sshDomain
 			}
 		}
 
@@ -215,6 +220,11 @@ func addSingleTunnel(ctx *actions.Context, cfg *config.Config, transport_, backe
 
 	if err := cfg.Save(); err != nil {
 		return actions.NewError(actions.TunnelAdd, "failed to save config", err)
+	}
+
+	// Free the port in case a stale process is holding it
+	if tunnel.IsDNSTunnel() && tunnel.Port > 0 {
+		network.FreePort(tunnel.Port, "udp")
 	}
 
 	// Create and start systemd service

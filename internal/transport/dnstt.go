@@ -32,6 +32,7 @@ func buildDNSTTService(tunnel *config.TunnelConfig, cfg *config.Config) (*dnsttS
 	}
 
 	binPath := filepath.Join(config.DefaultBinDir, "dnstt-server")
+
 	listenAddr := fmt.Sprintf("0.0.0.0:%d", tunnel.Port)
 
 	mtu := tunnel.DNSTT.MTU

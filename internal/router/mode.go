@@ -4,55 +4,54 @@ import (
 	"fmt"
 
 	"github.com/anonvector/slipgate/internal/config"
+	"github.com/anonvector/slipgate/internal/dnsrouter"
 	"github.com/anonvector/slipgate/internal/service"
 )
 
-// SwitchMode transitions between single and multi mode.
+// SwitchMode is kept for backward compatibility but all tunnels now use the
+// DNS router. Restarting services ensures they bind to internal ports.
 func SwitchMode(cfg *config.Config, newMode string) error {
-	oldMode := cfg.Route.Mode
-
-	switch {
-	case oldMode == "single" && newMode == "multi":
-		return switchToMulti(cfg)
-	case oldMode == "multi" && newMode == "single":
-		return switchToSingle(cfg)
-	default:
-		return fmt.Errorf("already in %s mode", newMode)
-	}
-}
-
-func switchToMulti(cfg *config.Config) error {
-	// Start all DNS tunnel services on their internal ports
+	// Restart all DNS tunnel services to pick up config changes
 	for _, t := range cfg.Tunnels {
 		if t.IsDNSTunnel() && t.Enabled {
 			svcName := service.TunnelServiceName(t.Tag)
 			if err := service.Restart(svcName); err != nil {
-				return fmt.Errorf("start tunnel %s: %w", t.Tag, err)
+				return fmt.Errorf("restart tunnel %s: %w", t.Tag, err)
 			}
 		}
 	}
 
-	// Ensure the DNS router is running (forwards :53 → internal ports)
+	// Ensure DNS router is running
 	return ensureRouterRunning()
 }
 
-func switchToSingle(cfg *config.Config) error {
-	// Stop all DNS tunnel services except the active one
-	for _, t := range cfg.Tunnels {
-		if t.IsDNSTunnel() && t.Enabled && t.Tag != cfg.Route.Active {
-			svcName := service.TunnelServiceName(t.Tag)
-			_ = service.Stop(svcName)
-		}
+// SwitchActive changes the active tunnel (stops others, starts the selected one).
+func SwitchActive(cfg *config.Config, tag string) error {
+	tunnel := cfg.GetTunnel(tag)
+	if tunnel == nil {
+		return fmt.Errorf("tunnel %q not found", tag)
 	}
 
-	// Restart the active tunnel on its internal port
-	if cfg.Route.Active != "" {
-		svcName := service.TunnelServiceName(cfg.Route.Active)
-		if err := service.Restart(svcName); err != nil {
-			return fmt.Errorf("restart active tunnel: %w", err)
-		}
+	if cfg.Route.Active != "" && cfg.Route.Active != tag {
+		oldName := service.TunnelServiceName(cfg.Route.Active)
+		_ = service.Stop(oldName)
 	}
 
-	// DNS router must stay running to forward :53 → internal ports
-	return ensureRouterRunning()
+	newName := service.TunnelServiceName(tag)
+	if err := service.Start(newName); err != nil {
+		return err
+	}
+
+	return dnsrouter.RestartRouterService()
+}
+
+func ensureRouterRunning() error {
+	status, err := service.Status("slipgate-dnsrouter")
+	if err != nil || status != "active" {
+		if err := dnsrouter.CreateRouterService(); err != nil {
+			return err
+		}
+		return dnsrouter.StartRouterService()
+	}
+	return nil
 }
