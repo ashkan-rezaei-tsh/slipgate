@@ -10,8 +10,10 @@ import (
 	"github.com/anonvector/slipgate/internal/actions"
 	"github.com/anonvector/slipgate/internal/binary"
 	"github.com/anonvector/slipgate/internal/config"
+	"github.com/anonvector/slipgate/internal/network"
 	"github.com/anonvector/slipgate/internal/proxy"
 	"github.com/anonvector/slipgate/internal/service"
+	"github.com/anonvector/slipgate/internal/transport"
 	"github.com/anonvector/slipgate/internal/version"
 	"github.com/anonvector/slipgate/internal/warp"
 )
@@ -122,27 +124,53 @@ func handleSystemUpdate(ctx *actions.Context) error {
 		}
 	}
 
-	// Restart all running slipgate services
+	// Regenerate and restart all tunnel services
+	// This ensures systemd unit files match the current binary interface.
 	out.Print("")
-	out.Info("Restarting services...")
+	out.Info("Regenerating services...")
 	cfg := ctx.Config.(*config.Config)
+
+	// Ensure port 53 is available (OS updates can re-enable systemd-resolved stub)
 	for _, t := range cfg.Tunnels {
-		svcName := service.TunnelServiceName(t.Tag)
-		if status, _ := service.Status(svcName); status == "active" {
-			if err := service.Restart(svcName); err != nil {
-				out.Warning(fmt.Sprintf("Failed to restart %s: %v", svcName, err))
-			} else {
-				out.Success(fmt.Sprintf("  %s restarted", svcName))
+		if t.IsDNSTunnel() {
+			if err := network.DisableResolvedStub(); err != nil {
+				out.Warning("Failed to disable systemd-resolved stub: " + err.Error())
 			}
+			break
 		}
 	}
+
+	// Restart infrastructure services first (DNS router needs port 53 before tunnels)
 	for _, svc := range []string{"slipgate-dnsrouter", "slipgate-socks5"} {
-		if status, _ := service.Status(svc); status == "active" {
+		if service.Exists(svc) {
 			if err := service.Restart(svc); err != nil {
 				out.Warning(fmt.Sprintf("Failed to restart %s: %v", svc, err))
 			} else {
 				out.Success(fmt.Sprintf("  %s restarted", svc))
 			}
+		}
+	}
+
+	// Then regenerate and restart tunnel services
+	for i := range cfg.Tunnels {
+		t := &cfg.Tunnels[i]
+		if t.IsDirectTransport() {
+			continue
+		}
+		svcName := service.TunnelServiceName(t.Tag)
+		wasActive := false
+		if status, _ := service.Status(svcName); status == "active" {
+			wasActive = true
+			_ = service.Stop(svcName)
+		}
+		if err := transport.CreateService(t, cfg); err != nil {
+			out.Warning(fmt.Sprintf("Failed to regenerate %s: %v", svcName, err))
+			continue
+		}
+		if wasActive {
+			out.Success(fmt.Sprintf("  %s regenerated and restarted", svcName))
+		} else {
+			out.Success(fmt.Sprintf("  %s regenerated", svcName))
 		}
 	}
 
