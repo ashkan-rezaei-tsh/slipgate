@@ -24,15 +24,51 @@ const releaseBaseURL = "https://github.com/anonvector/slipgate/releases"
 // directory instead of downloading. Used for SCP/offline installs.
 var OfflineDir string
 
-const stableDownloadBase = releaseBaseURL + "/latest/download"
+const (
+	stableDownloadBase = releaseBaseURL + "/latest/download"
+	repoAPI            = "https://api.github.com/repos/anonvector/slipgate/releases"
+)
 
 // DownloadBase returns the base URL for slipgate binary downloads.
-// Dev builds use their tagged release; stable builds use latest.
+// Dev builds resolve the latest dev-* pre-release dynamically so that
+// updates still work even after the original pinned release is deleted.
 func DownloadBase() string {
 	if version.ReleaseTag != "" {
+		if tag := latestDevTag(); tag != "" {
+			return releaseBaseURL + "/download/" + tag
+		}
+		// Fallback to the baked-in tag
 		return releaseBaseURL + "/download/" + version.ReleaseTag
 	}
 	return stableDownloadBase
+}
+
+// latestDevTag queries GitHub for the most recent dev-* pre-release tag.
+func latestDevTag() string {
+	resp, err := httpClient.Get(repoAPI)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return ""
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return ""
+	}
+	var releases []struct {
+		TagName string `json:"tag_name"`
+	}
+	if json.Unmarshal(body, &releases) != nil {
+		return ""
+	}
+	for _, r := range releases {
+		if strings.HasPrefix(r.TagName, "dev-") {
+			return r.TagName
+		}
+	}
+	return ""
 }
 
 // binaryURLTemplates returns download URL templates for transport binaries.
@@ -102,11 +138,15 @@ func installFromOffline(name, destPath string) error {
 }
 
 // CheckUpdate checks GitHub releases for a newer version.
-// Dev builds check their own tag; stable builds check latest.
+// Dev builds find the latest dev-* pre-release; stable builds check latest.
 func CheckUpdate() (newVersion string, downloadURL string, err error) {
-	apiURL := "https://api.github.com/repos/anonvector/slipgate/releases/latest"
+	apiURL := repoAPI + "/latest"
 	if version.ReleaseTag != "" {
-		apiURL = "https://api.github.com/repos/anonvector/slipgate/releases/tags/" + version.ReleaseTag
+		if tag := latestDevTag(); tag != "" {
+			apiURL = repoAPI + "/tags/" + tag
+		} else {
+			apiURL = repoAPI + "/tags/" + version.ReleaseTag
+		}
 	}
 	resp, err := httpClient.Get(apiURL)
 	if err != nil {
