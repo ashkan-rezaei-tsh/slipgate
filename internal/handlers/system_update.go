@@ -122,6 +122,18 @@ func handleSystemUpdate(ctx *actions.Context) error {
 			break
 		}
 	}
+	// Restart infrastructure services first (DNS router needs port 53 before tunnels)
+	for _, svc := range []string{"slipgate-dnsrouter", "slipgate-socks5"} {
+		if service.Exists(svc) {
+			if err := service.Restart(svc); err != nil {
+				out.Warning(fmt.Sprintf("Failed to restart %s: %v", svc, err))
+			} else {
+				out.Success(fmt.Sprintf("  %s restarted", svc))
+			}
+		}
+	}
+
+	// Then regenerate and restart tunnel services
 	for i := range cfg.Tunnels {
 		t := &cfg.Tunnels[i]
 		if t.IsDirectTransport() {
@@ -141,15 +153,6 @@ func handleSystemUpdate(ctx *actions.Context) error {
 			out.Success(fmt.Sprintf("  %s regenerated and restarted", svcName))
 		} else {
 			out.Success(fmt.Sprintf("  %s regenerated", svcName))
-		}
-	}
-	for _, svc := range []string{"slipgate-dnsrouter", "slipgate-socks5"} {
-		if service.Exists(svc) {
-			if err := service.Restart(svc); err != nil {
-				out.Warning(fmt.Sprintf("Failed to restart %s: %v", svc, err))
-			} else {
-				out.Success(fmt.Sprintf("  %s restarted", svc))
-			}
 		}
 	}
 

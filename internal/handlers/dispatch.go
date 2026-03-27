@@ -39,6 +39,7 @@ func init() {
 	register(actions.SystemInstall, handleSystemInstall)
 	register(actions.SystemUninstall, handleSystemUninstall)
 	register(actions.SystemUpdate, handleSystemUpdate)
+	register(actions.SystemRestart, handleSystemRestart)
 	register(actions.SystemUsers, handleSystemUsers)
 	register(actions.ConfigExport, handleConfigExport)
 	register(actions.ConfigImport, handleConfigImport)

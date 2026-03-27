@@ -21,6 +21,7 @@ const (
 	SystemInstall   = "system.install"
 	SystemUninstall = "system.uninstall"
 	SystemUpdate    = "system.update"
+	SystemRestart   = "system.restart"
 	SystemUsers     = "system.users"
 	QuickWizard     = "system.wizard"
 

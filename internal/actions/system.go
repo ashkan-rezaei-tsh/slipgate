@@ -20,6 +20,12 @@ func init() {
 	})
 
 	Register(&Action{
+		ID:       SystemRestart,
+		Name:     "Restart",
+		Category: "system",
+	})
+
+	Register(&Action{
 		ID:       SystemUsers,
 		Name:     "Users",
 		Category: "system",

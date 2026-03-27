@@ -66,6 +66,7 @@ func registerActionCommands() {
 		actions.SystemInstall:   "install",
 		actions.SystemUninstall: "uninstall",
 		actions.SystemUpdate:    "update",
+		actions.SystemRestart:   "restart",
 		actions.SystemUsers: "users",
 	}
 
