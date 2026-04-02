@@ -30,11 +30,11 @@ const (
 )
 
 // DownloadBase returns the base URL for slipgate binary downloads.
-// Dev builds resolve the latest dev-* pre-release dynamically so that
-// updates still work even after the original pinned release is deleted.
+// Dev builds pick whichever release is newest (dev or stable).
+// Production builds always use the latest stable release.
 func DownloadBase() string {
 	if version.ReleaseTag != "" {
-		if tag := latestDevTag(); tag != "" {
+		if tag := latestReleaseTag(); tag != "" {
 			return releaseBaseURL + "/download/" + tag
 		}
 		// Fallback to the baked-in tag
@@ -43,9 +43,38 @@ func DownloadBase() string {
 	return stableDownloadBase
 }
 
+// latestReleaseTag returns the most recent release tag (dev or stable).
+// GitHub returns releases sorted by creation date (newest first),
+// so the first entry is the overall latest.
+func latestReleaseTag() string {
+	resp, err := httpClient.Get(repoAPI + "?per_page=5")
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return ""
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return ""
+	}
+	var releases []struct {
+		TagName     string `json:"tag_name"`
+		PublishedAt string `json:"published_at"`
+	}
+	if json.Unmarshal(body, &releases) != nil {
+		return ""
+	}
+	if len(releases) > 0 {
+		return releases[0].TagName
+	}
+	return ""
+}
+
 // latestDevTag queries GitHub for the most recent dev-* pre-release tag.
 func latestDevTag() string {
-	resp, err := httpClient.Get(repoAPI)
+	resp, err := httpClient.Get(repoAPI + "?per_page=10")
 	if err != nil {
 		return ""
 	}
@@ -139,11 +168,12 @@ func installFromOffline(name, destPath string) error {
 }
 
 // CheckUpdate checks GitHub releases for a newer version.
-// Dev builds find the latest dev-* pre-release; stable builds check latest.
+// Dev builds check the latest release of any kind (dev or stable).
+// Stable builds only check the latest stable release.
 func CheckUpdate() (newVersion string, downloadURL string, err error) {
 	apiURL := repoAPI + "/latest"
 	if version.ReleaseTag != "" {
-		if tag := latestDevTag(); tag != "" {
+		if tag := latestReleaseTag(); tag != "" {
 			apiURL = repoAPI + "/tags/" + tag
 		} else {
 			apiURL = repoAPI + "/tags/" + version.ReleaseTag
