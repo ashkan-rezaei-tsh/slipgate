@@ -132,6 +132,7 @@ func ensureSSHMatchGroup() error {
 # SlipGate global SSH settings
 MaxStartups 100:30:300
 MaxSessions 100
+TCPKeepAlive no
 `
 	const matchBlock = `
 # SlipGate SSH tunnel users
@@ -142,7 +143,6 @@ Match Group slipgate-ssh
     ForceCommand /bin/false
     ClientAliveInterval 30
     ClientAliveCountMax 10
-    TCPKeepAlive no
 `
 	data, err := os.ReadFile("/etc/ssh/sshd_config")
 	if err != nil {
