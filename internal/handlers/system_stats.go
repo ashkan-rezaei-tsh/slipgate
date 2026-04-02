@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
 	"sort"
 	"strings"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/anonvector/slipgate/internal/actions"
 	"github.com/anonvector/slipgate/internal/config"
 	"github.com/anonvector/slipgate/internal/service"
+	"github.com/anonvector/slipgate/internal/version"
 	"golang.org/x/term"
 )
 
@@ -59,8 +59,7 @@ func handleSystemStats(ctx *actions.Context) error {
 
 	// Clear screen and draw initial blank state.
 	fmt.Print("\033[H\033[2J")
-	drawDashboard(cpuHist, ramHist, rxHist, txHist, 0, 0, 0, 0,
-		0, 0, 0, nil, nil)
+	drawDashboard(cpuHist, ramHist, rxHist, txHist, 0, 0, 0, 0, 0, 0, nil)
 
 	for {
 		select {
@@ -99,14 +98,11 @@ func handleSystemStats(ctx *actions.Context) error {
 			rxHist = appendCapped(rxHist, rxRate)
 			txHist = appendCapped(txHist, txRate)
 
-			sshSessions := countSSHSessions()
-
 			tunnels := activeTunnels(cfg)
-			connStats := connectionStats(cfg)
 
 			drawDashboard(cpuHist, ramHist, rxHist, txHist,
 				cpuPct, ramPct, rxRate, txRate,
-				totalMB, usedMB, sshSessions, tunnels, connStats)
+				totalMB, usedMB, tunnels)
 		}
 	}
 }
@@ -116,68 +112,8 @@ type tunnelInfo struct {
 	tag       string
 	transport string
 	backend   string
+	domain    string
 	status    string
-}
-
-// connStat holds connection counts for display.
-type connStat struct {
-	label string
-	count int
-}
-
-// connectionStats returns user-facing connection counts.
-//
-// SSH tunnel users: each user holds one TCP connection from a tunnel process
-// to sshd on 127.0.0.1:22 — so count established connections on port 22
-// from localhost (excludes admin sessions from external IPs).
-//
-// SOCKS streams: each TCP destination a user visits creates a separate
-// connection to the SOCKS proxy, so one user = many streams. Shown as
-// "streams" to avoid confusion with user count.
-func connectionStats(cfg *config.Config) []connStat {
-	if cfg == nil {
-		return nil
-	}
-
-	// Parse all established connections once.
-	data, err := exec.Command("ss", "-tn", "state", "established").Output()
-	if err != nil {
-		return nil
-	}
-
-	sshUsers := 0
-	socksStreams := 0
-	for _, line := range strings.Split(string(data), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 5 {
-			continue
-		}
-		local := fields[3]
-		peer := fields[4]
-
-		// SSH tunnel users: localhost → port 22
-		if strings.HasSuffix(local, ":22") && isLocalPeer(peer) {
-			sshUsers++
-		}
-		// SOCKS streams: any connection to port 1080
-		if strings.HasSuffix(local, ":1080") {
-			socksStreams++
-		}
-	}
-
-	var stats []connStat
-	if sshUsers > 0 {
-		stats = append(stats, connStat{label: "SSH users", count: sshUsers})
-	}
-	if socksStreams > 0 {
-		stats = append(stats, connStat{label: "SOCKS streams", count: socksStreams})
-	}
-	return stats
-}
-
-// isLocalPeer returns true if the peer address is from localhost.
-func isLocalPeer(addr string) bool {
-	return strings.HasPrefix(addr, "127.0.0.1:") || strings.HasPrefix(addr, "[::1]:")
 }
 
 // activeTunnels returns up to 10 tunnels with their status.
@@ -201,6 +137,7 @@ func activeTunnels(cfg *config.Config) []tunnelInfo {
 			tag:       t.Tag,
 			transport: t.Transport,
 			backend:   t.Backend,
+			domain:    t.Domain,
 			status:    status,
 		})
 		// DNSTT serves both dnstt and noizdns clients on the same process.
@@ -210,6 +147,7 @@ func activeTunnels(cfg *config.Config) []tunnelInfo {
 				tag:       noizTag,
 				transport: "noizdns",
 				backend:   t.Backend,
+				domain:    t.Domain,
 				status:    status,
 			})
 		}
@@ -243,66 +181,128 @@ func appendCapped(s []float64, v float64) []float64 {
 
 func drawDashboard(cpuH, ramH, rxH, txH []float64,
 	cpuPct, ramPct, rxRate, txRate float64,
-	totalMB, usedMB uint64, sshSessions int, tunnels []tunnelInfo, connStats []connStat) {
+	totalMB, usedMB uint64, tunnels []tunnelInfo) {
 
 	var b strings.Builder
 	b.WriteString("\033[H") // cursor home
 
+	// Header
+	now := time.Now().Format("2006-01-02 15:04:05")
 	b.WriteString("\r\n")
-	b.WriteString("  \033[1mSlipGate Live Stats\033[0m\r\n")
-	b.WriteString("  ─────────────────────────────────────────────────────\r\n\r\n")
+	b.WriteString(fmt.Sprintf("  \033[1;36mSlipGate\033[0m \033[2m%s\033[0m%s\033[2m%s\033[0m\r\n",
+		version.String(), strings.Repeat(" ", 4), now))
+	b.WriteString("  \033[2m────────────────────────────────────────────────────────────\033[0m\r\n\r\n")
 
-	// CPU + RAM sparklines.
-	b.WriteString(fmt.Sprintf("  \033[1mCPU\033[0m  %5.1f%%  %s\r\n", cpuPct, sparkline(cpuH, 100, "\033[36m")))
-	b.WriteString(fmt.Sprintf("  \033[1mRAM\033[0m  %5.1f%%  %s\r\n\r\n", ramPct, sparkline(ramH, 100, "\033[35m")))
+	// Load average + uptime
+	load := readLoadAvg()
+	uptime := readUptime()
+	b.WriteString(fmt.Sprintf("  \033[2mload:\033[0m %s    \033[2muptime:\033[0m %s\r\n\r\n", load, uptime))
 
-	// RAM bar.
-	b.WriteString(fmt.Sprintf("  RAM  %s  %d / %d MB\r\n\r\n", progressBar(ramPct), usedMB, totalMB))
+	// CPU
+	cpuColor := gaugeColor(cpuPct)
+	b.WriteString(fmt.Sprintf("  \033[1mCPU\033[0m  %s%5.1f%%\033[0m  %s  \033[2mpeak %5.1f%%  avg %5.1f%%\033[0m\r\n",
+		cpuColor, cpuPct, sparkline(cpuH, 100, "\033[36m"), histMax(cpuH), histAvg(cpuH)))
+	b.WriteString(fmt.Sprintf("       %s\r\n\r\n", progressBar(cpuPct, "\033[36m")))
 
-	// Traffic throughput sparklines.
+	// RAM
+	ramColor := gaugeColor(ramPct)
+	b.WriteString(fmt.Sprintf("  \033[1mRAM\033[0m  %s%5.1f%%\033[0m  %s  \033[2mpeak %5.1f%%  avg %5.1f%%\033[0m\r\n",
+		ramColor, ramPct, sparkline(ramH, 100, "\033[35m"), histMax(ramH), histAvg(ramH)))
+	b.WriteString(fmt.Sprintf("       %s  \033[2m%d / %d MB\033[0m\r\n\r\n",
+		progressBar(ramPct, "\033[35m"), usedMB, totalMB))
+
+	// Traffic
 	rxMax := autoMax(rxH)
 	txMax := autoMax(txH)
-	b.WriteString(fmt.Sprintf("  \033[1m↓\033[0m %9s/s  %s\r\n", formatBytes(uint64(rxRate)), sparkline(rxH, rxMax, "\033[32m")))
-	b.WriteString(fmt.Sprintf("  \033[1m↑\033[0m %9s/s  %s\r\n\r\n", formatBytes(uint64(txRate)), sparkline(txH, txMax, "\033[33m")))
+	b.WriteString(fmt.Sprintf("  \033[1;32m↓ RX\033[0m %9s/s  %s  \033[2mpeak %s/s\033[0m\r\n",
+		formatBytes(uint64(rxRate)), sparkline(rxH, rxMax, "\033[32m"), formatBytes(uint64(histMax(rxH)))))
+	b.WriteString(fmt.Sprintf("  \033[1;33m↑ TX\033[0m %9s/s  %s  \033[2mpeak %s/s\033[0m\r\n\r\n",
+		formatBytes(uint64(txRate)), sparkline(txH, txMax, "\033[33m"), formatBytes(uint64(histMax(txH)))))
 
-	// SSH sessions.
-	b.WriteString(fmt.Sprintf("  \033[1mSSH Sessions:\033[0m %d\r\n\r\n", sshSessions))
-
-	// Connections.
-	b.WriteString("  \033[1mConnections\033[0m\r\n")
-	b.WriteString("  ───────────\r\n")
-	if len(connStats) == 0 {
-		b.WriteString("  (no active connections)\r\n")
-	} else {
-		for _, cs := range connStats {
-			b.WriteString(fmt.Sprintf("  %-16s %d\r\n", cs.label, cs.count))
-		}
-	}
-	b.WriteString("\r\n")
-
-	// Active tunnels.
+	// Tunnels
 	b.WriteString("  \033[1mTunnels\033[0m\r\n")
-	b.WriteString("  ───────\r\n")
+	b.WriteString("  \033[2m────────────────────────────────────────────────────────────\033[0m\r\n")
 	if len(tunnels) == 0 {
-		b.WriteString("  (none configured)\r\n")
+		b.WriteString("  \033[2m(none configured)\033[0m\r\n")
 	} else {
-		b.WriteString(fmt.Sprintf("  %-18s %-13s %-8s %s\r\n",
-			"\033[2mTAG\033[0m", "\033[2mTYPE\033[0m", "\033[2mBACKEND\033[0m", "\033[2mSTATUS\033[0m"))
+		b.WriteString(fmt.Sprintf("  \033[2m%-16s %-12s %-7s %-22s %s\033[0m\r\n",
+			"TAG", "TYPE", "BACKEND", "DOMAIN", "STATUS"))
 		for _, t := range tunnels {
-			dot := "\033[31m●\033[0m" // red
+			dot := "\033[31m●\033[0m"
+			statusText := t.status
 			if t.status == "active" {
-				dot = "\033[32m●\033[0m" // green
+				dot = "\033[32m●\033[0m"
+				statusText = "\033[32m" + t.status + "\033[0m"
+			} else {
+				statusText = "\033[31m" + t.status + "\033[0m"
 			}
-			b.WriteString(fmt.Sprintf("  %-18s %-13s %-8s %s %s\r\n",
-				t.tag, t.transport, t.backend, dot, t.status))
+			domain := t.domain
+			if len(domain) > 22 {
+				domain = domain[:19] + "..."
+			}
+			b.WriteString(fmt.Sprintf("  %-16s %-12s %-7s %-22s %s %s\r\n",
+				t.tag, t.transport, t.backend, domain, dot, statusText))
 		}
 	}
 
-	b.WriteString("\r\n  \033[2mPress Ctrl+C to exit\033[0m\r\n")
+	// Services
+	b.WriteString("\r\n  \033[1mServices\033[0m\r\n")
+	b.WriteString("  \033[2m────────────────────────────────────────────────────────────\033[0m\r\n")
+	for _, svc := range []struct{ name, label string }{
+		{"slipgate-dnsrouter", "DNS Router"},
+		{"slipgate-socks5", "SOCKS5 Proxy"},
+	} {
+		if service.Exists(svc.name) {
+			status, _ := service.Status(svc.name)
+			dot := "\033[31m●\033[0m"
+			statusColor := "\033[31m"
+			if status == "active" {
+				dot = "\033[32m●\033[0m"
+				statusColor = "\033[32m"
+			}
+			b.WriteString(fmt.Sprintf("  %-20s %s %s%s\033[0m\r\n", svc.label, dot, statusColor, status))
+		}
+	}
 
+	b.WriteString("\r\n  \033[2mPress q or Ctrl+C to exit\033[0m\r\n")
 	b.WriteString("\033[J") // clear to end of screen
 
 	fmt.Print(b.String())
+}
+
+// gaugeColor returns an ANSI color based on percentage thresholds.
+func gaugeColor(pct float64) string {
+	switch {
+	case pct >= 85:
+		return "\033[1;31m" // bold red
+	case pct >= 60:
+		return "\033[1;33m" // bold yellow
+	default:
+		return "\033[1;32m" // bold green
+	}
+}
+
+// histMax returns the maximum value in a history slice.
+func histMax(data []float64) float64 {
+	m := 0.0
+	for _, v := range data {
+		if v > m {
+			m = v
+		}
+	}
+	return m
+}
+
+// histAvg returns the average value in a history slice.
+func histAvg(data []float64) float64 {
+	if len(data) == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range data {
+		sum += v
+	}
+	return sum / float64(len(data))
 }
 
 // autoMax returns the max value in data, with a minimum floor of 1024 (1 KB/s)
@@ -338,7 +338,7 @@ func sparkline(data []float64, maxVal float64, color string) string {
 	return b.String()
 }
 
-func progressBar(pct float64) string {
+func progressBar(pct float64, color string) string {
 	const width = 40
 	filled := int(pct / 100 * width)
 	if filled < 0 {
@@ -348,14 +348,15 @@ func progressBar(pct float64) string {
 		filled = width
 	}
 	var b strings.Builder
-	b.WriteString("\033[32m")
+	b.WriteString(color)
 	for i := 0; i < filled; i++ {
 		b.WriteRune('█')
 	}
-	b.WriteString("\033[0m")
+	b.WriteString("\033[2m")
 	for i := filled; i < width; i++ {
 		b.WriteRune('░')
 	}
+	b.WriteString("\033[0m")
 	return b.String()
 }
 
@@ -386,20 +387,37 @@ func readCPUStat() (idle, total uint64) {
 	return idle, total
 }
 
-// ---------- shared helpers ----------
-
-// countSSHSessions counts active SSH sessions via who(1).
-// Each line in who output represents one logged-in session.
-func countSSHSessions() int {
-	data, err := exec.Command("who").Output()
+// readLoadAvg reads the system load average.
+func readLoadAvg() string {
+	data, err := os.ReadFile("/proc/loadavg")
 	if err != nil {
-		return 0
+		return "N/A"
 	}
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	if len(lines) == 1 && lines[0] == "" {
-		return 0
+	fields := strings.Fields(string(data))
+	if len(fields) >= 3 {
+		return strings.Join(fields[:3], "  ")
 	}
-	return len(lines)
+	return "N/A"
+}
+
+// readUptime reads system uptime and formats it.
+func readUptime() string {
+	data, err := os.ReadFile("/proc/uptime")
+	if err != nil {
+		return "N/A"
+	}
+	var secs float64
+	fmt.Sscanf(string(data), "%f", &secs)
+	d := int(secs) / 86400
+	h := (int(secs) % 86400) / 3600
+	m := (int(secs) % 3600) / 60
+	if d > 0 {
+		return fmt.Sprintf("%dd %dh %dm", d, h, m)
+	}
+	if h > 0 {
+		return fmt.Sprintf("%dh %dm", h, m)
+	}
+	return fmt.Sprintf("%dm", m)
 }
 
 func interfaceTraffic() (uint64, uint64) {
