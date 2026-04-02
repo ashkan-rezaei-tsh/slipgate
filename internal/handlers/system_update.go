@@ -53,7 +53,7 @@ func handleSystemUpdate(ctx *actions.Context) error {
 	out.Print("")
 	out.Info("Updating transport binaries...")
 
-	transportBins := []string{"dnstt-server", "slipstream-server", "caddy-naive"}
+	transportBins := []string{"dnstt-server", "slipstream-server", "vaydns-server", "caddy-naive"}
 	for _, name := range transportBins {
 		binPath := filepath.Join(config.DefaultBinDir, name)
 		if _, err := os.Stat(binPath); os.IsNotExist(err) {

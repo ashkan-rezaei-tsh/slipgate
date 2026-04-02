@@ -64,7 +64,7 @@ func handleSystemUninstall(ctx *actions.Context) error {
 	out.Info("Removing binaries...")
 	execPath, _ := os.Executable()
 	for _, bin := range []string{
-		"dnstt-server", "slipstream-server", "caddy-naive", "microsocks",
+		"dnstt-server", "slipstream-server", "vaydns-server", "caddy-naive", "microsocks",
 	} {
 		os.Remove(config.DefaultBinDir + "/" + bin)
 	}

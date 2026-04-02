@@ -179,6 +179,23 @@ func appendCapped(s []float64, v float64) []float64 {
 	return s
 }
 
+// 256-color palette
+const (
+	cHeader   = "\033[38;5;75m"  // steel blue
+	cDim      = "\033[38;5;242m" // gray
+	cLabel    = "\033[38;5;255m" // bright white
+	cCPU      = "\033[38;5;81m"  // sky blue
+	cRAM      = "\033[38;5;177m" // lavender
+	cRX       = "\033[38;5;114m" // soft green
+	cTX       = "\033[38;5;222m" // warm yellow
+	cOK       = "\033[38;5;78m"  // green
+	cFail     = "\033[38;5;203m" // soft red
+	cWarn     = "\033[38;5;214m" // orange
+	cDivider  = "\033[38;5;238m" // dark gray
+	cReset    = "\033[0m"
+	cBold     = "\033[1m"
+)
+
 func drawDashboard(cpuH, ramH, rxH, txH []float64,
 	cpuPct, ramPct, rxRate, txRate float64,
 	totalMB, usedMB uint64, tunnels []tunnelInfo) {
@@ -189,52 +206,57 @@ func drawDashboard(cpuH, ramH, rxH, txH []float64,
 	// Header
 	now := time.Now().Format("2006-01-02 15:04:05")
 	b.WriteString("\r\n")
-	b.WriteString(fmt.Sprintf("  \033[1;36mSlipGate\033[0m \033[2m%s\033[0m%s\033[2m%s\033[0m\r\n",
-		version.String(), strings.Repeat(" ", 4), now))
-	b.WriteString("  \033[2m────────────────────────────────────────────────────────────\033[0m\r\n\r\n")
+	b.WriteString(fmt.Sprintf("  %s%sSlipGate%s  %s%s%s    %s%s%s\r\n",
+		cHeader, cBold, cReset, cDim, version.String(), cReset, cDim, now, cReset))
+	b.WriteString(fmt.Sprintf("  %s────────────────────────────────────────────────────────────%s\r\n\r\n",
+		cDivider, cReset))
 
 	// Load average + uptime
 	load := readLoadAvg()
 	uptime := readUptime()
-	b.WriteString(fmt.Sprintf("  \033[2mload:\033[0m %s    \033[2muptime:\033[0m %s\r\n\r\n", load, uptime))
+	b.WriteString(fmt.Sprintf("  %sload%s  %s    %suptime%s  %s\r\n\r\n",
+		cDim, cReset, load, cDim, cReset, uptime))
 
 	// CPU
-	cpuColor := gaugeColor(cpuPct)
-	b.WriteString(fmt.Sprintf("  \033[1mCPU\033[0m  %s%5.1f%%\033[0m  %s  \033[2mpeak %5.1f%%  avg %5.1f%%\033[0m\r\n",
-		cpuColor, cpuPct, sparkline(cpuH, 100, "\033[36m"), histMax(cpuH), histAvg(cpuH)))
-	b.WriteString(fmt.Sprintf("       %s\r\n\r\n", progressBar(cpuPct, "\033[36m")))
+	cpuColor := gaugeColor256(cpuPct)
+	b.WriteString(fmt.Sprintf("  %s%sCPU%s  %s%5.1f%%%s  %s  %speak %5.1f%%  avg %5.1f%%%s\r\n",
+		cBold, cLabel, cReset, cpuColor, cpuPct, cReset, sparkline(cpuH, 100, cCPU),
+		cDim, histMax(cpuH), histAvg(cpuH), cReset))
+	b.WriteString(fmt.Sprintf("       %s\r\n\r\n", progressBar(cpuPct, cCPU)))
 
 	// RAM
-	ramColor := gaugeColor(ramPct)
-	b.WriteString(fmt.Sprintf("  \033[1mRAM\033[0m  %s%5.1f%%\033[0m  %s  \033[2mpeak %5.1f%%  avg %5.1f%%\033[0m\r\n",
-		ramColor, ramPct, sparkline(ramH, 100, "\033[35m"), histMax(ramH), histAvg(ramH)))
-	b.WriteString(fmt.Sprintf("       %s  \033[2m%d / %d MB\033[0m\r\n\r\n",
-		progressBar(ramPct, "\033[35m"), usedMB, totalMB))
+	ramColor := gaugeColor256(ramPct)
+	b.WriteString(fmt.Sprintf("  %s%sRAM%s  %s%5.1f%%%s  %s  %speak %5.1f%%  avg %5.1f%%%s\r\n",
+		cBold, cLabel, cReset, ramColor, ramPct, cReset, sparkline(ramH, 100, cRAM),
+		cDim, histMax(ramH), histAvg(ramH), cReset))
+	b.WriteString(fmt.Sprintf("       %s  %s%d / %d MB%s\r\n\r\n",
+		progressBar(ramPct, cRAM), cDim, usedMB, totalMB, cReset))
 
 	// Traffic
 	rxMax := autoMax(rxH)
 	txMax := autoMax(txH)
-	b.WriteString(fmt.Sprintf("  \033[1;32m↓ RX\033[0m %9s/s  %s  \033[2mpeak %s/s\033[0m\r\n",
-		formatBytes(uint64(rxRate)), sparkline(rxH, rxMax, "\033[32m"), formatBytes(uint64(histMax(rxH)))))
-	b.WriteString(fmt.Sprintf("  \033[1;33m↑ TX\033[0m %9s/s  %s  \033[2mpeak %s/s\033[0m\r\n\r\n",
-		formatBytes(uint64(txRate)), sparkline(txH, txMax, "\033[33m"), formatBytes(uint64(histMax(txH)))))
+	b.WriteString(fmt.Sprintf("  %s%s↓ RX%s %9s/s  %s  %speak %s/s%s\r\n",
+		cBold, cRX, cReset, formatBytes(uint64(rxRate)), sparkline(rxH, rxMax, cRX),
+		cDim, formatBytes(uint64(histMax(rxH))), cReset))
+	b.WriteString(fmt.Sprintf("  %s%s↑ TX%s %9s/s  %s  %speak %s/s%s\r\n\r\n",
+		cBold, cTX, cReset, formatBytes(uint64(txRate)), sparkline(txH, txMax, cTX),
+		cDim, formatBytes(uint64(histMax(txH))), cReset))
 
 	// Tunnels
-	b.WriteString("  \033[1mTunnels\033[0m\r\n")
-	b.WriteString("  \033[2m────────────────────────────────────────────────────────────\033[0m\r\n")
+	b.WriteString(fmt.Sprintf("  %s%sTunnels%s\r\n", cBold, cLabel, cReset))
+	b.WriteString(fmt.Sprintf("  %s────────────────────────────────────────────────────────────%s\r\n",
+		cDivider, cReset))
 	if len(tunnels) == 0 {
-		b.WriteString("  \033[2m(none configured)\033[0m\r\n")
+		b.WriteString(fmt.Sprintf("  %s(none configured)%s\r\n", cDim, cReset))
 	} else {
-		b.WriteString(fmt.Sprintf("  \033[2m%-16s %-12s %-7s %-22s %s\033[0m\r\n",
-			"TAG", "TYPE", "BACKEND", "DOMAIN", "STATUS"))
+		b.WriteString(fmt.Sprintf("  %s%-16s %-12s %-7s %-22s %s%s\r\n",
+			cDim, "TAG", "TYPE", "BACKEND", "DOMAIN", "STATUS", cReset))
 		for _, t := range tunnels {
-			dot := "\033[31m●\033[0m"
-			statusText := t.status
+			dot := cFail + "●" + cReset
+			statusText := cFail + t.status + cReset
 			if t.status == "active" {
-				dot = "\033[32m●\033[0m"
-				statusText = "\033[32m" + t.status + "\033[0m"
-			} else {
-				statusText = "\033[31m" + t.status + "\033[0m"
+				dot = cOK + "●" + cReset
+				statusText = cOK + t.status + cReset
 			}
 			domain := t.domain
 			if len(domain) > 22 {
@@ -246,41 +268,43 @@ func drawDashboard(cpuH, ramH, rxH, txH []float64,
 	}
 
 	// Services
-	b.WriteString("\r\n  \033[1mServices\033[0m\r\n")
-	b.WriteString("  \033[2m────────────────────────────────────────────────────────────\033[0m\r\n")
+	b.WriteString(fmt.Sprintf("\r\n  %s%sServices%s\r\n", cBold, cLabel, cReset))
+	b.WriteString(fmt.Sprintf("  %s────────────────────────────────────────────────────────────%s\r\n",
+		cDivider, cReset))
 	for _, svc := range []struct{ name, label string }{
 		{"slipgate-dnsrouter", "DNS Router"},
 		{"slipgate-socks5", "SOCKS5 Proxy"},
 	} {
 		if service.Exists(svc.name) {
 			status, _ := service.Status(svc.name)
-			dot := "\033[31m●\033[0m"
-			statusColor := "\033[31m"
+			dot := cFail + "●" + cReset
+			statusColor := cFail
 			if status == "active" {
-				dot = "\033[32m●\033[0m"
-				statusColor = "\033[32m"
+				dot = cOK + "●" + cReset
+				statusColor = cOK
 			}
-			b.WriteString(fmt.Sprintf("  %-20s %s %s%s\033[0m\r\n", svc.label, dot, statusColor, status))
+			b.WriteString(fmt.Sprintf("  %-20s %s %s%s%s\r\n", svc.label, dot, statusColor, status, cReset))
 		}
 	}
 
-	b.WriteString("\r\n  \033[2mPress q or Ctrl+C to exit\033[0m\r\n")
+	b.WriteString(fmt.Sprintf("\r\n  %sPress q or Ctrl+C to exit%s\r\n", cDim, cReset))
 	b.WriteString("\033[J") // clear to end of screen
 
 	fmt.Print(b.String())
 }
 
-// gaugeColor returns an ANSI color based on percentage thresholds.
-func gaugeColor(pct float64) string {
+// gaugeColor256 returns a 256-color ANSI code based on percentage thresholds.
+func gaugeColor256(pct float64) string {
 	switch {
 	case pct >= 85:
-		return "\033[1;31m" // bold red
+		return cBold + cFail  // bold soft red
 	case pct >= 60:
-		return "\033[1;33m" // bold yellow
+		return cBold + cWarn  // bold orange
 	default:
-		return "\033[1;32m" // bold green
+		return cBold + cOK    // bold green
 	}
 }
+
 
 // histMax returns the maximum value in a history slice.
 func histMax(data []float64) float64 {
