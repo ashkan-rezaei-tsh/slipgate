@@ -212,12 +212,31 @@ func addSingleTunnel(ctx *actions.Context, cfg *config.Config, transport_, backe
 			}
 		}
 
-		tunnel.VayDNS = &config.VayDNSConfig{
+		vayCfg := &config.VayDNSConfig{
 			MTU:        config.DefaultMTU,
 			PrivateKey: privKeyPath,
 			PublicKey:  pubKey,
 			RecordType: recordType,
 		}
+		if v := ctx.GetArg("idle-timeout"); v != "" {
+			vayCfg.IdleTimeout = v
+		}
+		if v := ctx.GetArg("keep-alive"); v != "" {
+			vayCfg.KeepAlive = v
+		}
+		if v := ctx.GetArg("clientid-size"); v != "" {
+			var n int
+			if _, e := fmt.Sscanf(v, "%d", &n); e == nil {
+				vayCfg.ClientIDSize = n
+			}
+		}
+		if v := ctx.GetArg("queue-size"); v != "" {
+			var n int
+			if _, e := fmt.Sscanf(v, "%d", &n); e == nil {
+				vayCfg.QueueSize = n
+			}
+		}
+		tunnel.VayDNS = vayCfg
 		out.Success(fmt.Sprintf("Public key: %s", pubKey))
 
 	case config.TransportNaive:

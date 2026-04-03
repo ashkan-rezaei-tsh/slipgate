@@ -136,6 +136,18 @@ sudo slipgate tunnel add \
   --tag myvaydns \
   --domain v.example.com
 
+# VayDNS with all tuning parameters
+sudo slipgate tunnel add \
+  --transport vaydns \
+  --backend both \
+  --tag myvaydns \
+  --domain v.example.com \
+  --record-type txt \
+  --idle-timeout 10s \
+  --keep-alive 2s \
+  --clientid-size 2 \
+  --queue-size 512
+
 # Slipstream tunnel
 sudo slipgate tunnel add \
   --transport slipstream \
