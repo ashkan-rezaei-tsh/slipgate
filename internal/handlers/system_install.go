@@ -131,10 +131,13 @@ func handleSystemInstall(ctx *actions.Context) error {
 		}
 	}
 
-	// Write default config
-	cfg := config.Default()
-	if err := cfg.Save(); err != nil {
-		return actions.NewError(actions.SystemInstall, "failed to write config", err)
+	// Load existing config or create defaults for fresh install
+	cfg, err := config.Load()
+	if err != nil {
+		cfg = config.Default()
+		if err := cfg.Save(); err != nil {
+			return actions.NewError(actions.SystemInstall, "failed to write config", err)
+		}
 	}
 
 	out.Print("")
