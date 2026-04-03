@@ -88,7 +88,7 @@ func registerWARP() (*WarpAccount, error) {
 		"key":           pubKeyB64,
 		"install_id":    "",
 		"fcm_token":     "",
-		"tos":           time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),
+		"tos":           time.Now().UTC().Format(time.RFC3339),
 		"model":         "Linux",
 		"serial_number": "",
 	}
@@ -108,7 +108,7 @@ func registerWARP() (*WarpAccount, error) {
 	defer resp.Body.Close()
 
 	respBody, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return nil, fmt.Errorf("WARP API returned %d: %s", resp.StatusCode, string(respBody))
 	}
 
@@ -117,8 +117,24 @@ func registerWARP() (*WarpAccount, error) {
 		return nil, fmt.Errorf("parse WARP response: %w", err)
 	}
 
+	// Validate critical fields
 	if len(reg.Config.Peers) == 0 {
 		return nil, fmt.Errorf("WARP API returned no peers")
+	}
+	if reg.Config.Peers[0].PublicKey == "" {
+		return nil, fmt.Errorf("WARP API returned empty peer public key")
+	}
+	if reg.Config.Interface.Addresses.V4 == "" {
+		return nil, fmt.Errorf("WARP API returned no IPv4 address")
+	}
+
+	// Prefer host endpoint, fall back to v4
+	endpoint := reg.Config.Peers[0].Endpoint.Host
+	if endpoint == "" {
+		endpoint = reg.Config.Peers[0].Endpoint.V4
+	}
+	if endpoint == "" {
+		return nil, fmt.Errorf("WARP API returned no endpoint")
 	}
 
 	account := &WarpAccount{
@@ -127,20 +143,12 @@ func registerWARP() (*WarpAccount, error) {
 		PrivateKey: privKeyB64,
 		PublicKey:  pubKeyB64,
 		PeerKey:    reg.Config.Peers[0].PublicKey,
+		Endpoint:   endpoint,
 		ClientID:   reg.Config.ClientID,
 	}
 
-	// Prefer host endpoint, fall back to v4
-	endpoint := reg.Config.Peers[0].Endpoint.Host
-	if endpoint == "" {
-		endpoint = reg.Config.Peers[0].Endpoint.V4
-	}
-	account.Endpoint = endpoint
-
 	// Collect addresses
-	if v4 := reg.Config.Interface.Addresses.V4; v4 != "" {
-		account.Addresses = append(account.Addresses, v4+"/32")
-	}
+	account.Addresses = append(account.Addresses, reg.Config.Interface.Addresses.V4+"/32")
 	if v6 := reg.Config.Interface.Addresses.V6; v6 != "" {
 		account.Addresses = append(account.Addresses, v6+"/128")
 	}
