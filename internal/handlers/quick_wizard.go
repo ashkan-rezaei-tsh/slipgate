@@ -7,18 +7,18 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/anonvector/slipgate/internal/actions"
-	"github.com/anonvector/slipgate/internal/binary"
-	"github.com/anonvector/slipgate/internal/certs"
-	"github.com/anonvector/slipgate/internal/clientcfg"
-	"github.com/anonvector/slipgate/internal/config"
-	"github.com/anonvector/slipgate/internal/dnsrouter"
-	"github.com/anonvector/slipgate/internal/keys"
-	"github.com/anonvector/slipgate/internal/network"
-	"github.com/anonvector/slipgate/internal/prompt"
-	"github.com/anonvector/slipgate/internal/proxy"
-	"github.com/anonvector/slipgate/internal/system"
-	"github.com/anonvector/slipgate/internal/transport"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/actions"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/binary"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/certs"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/clientcfg"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/config"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/dnsrouter"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/keys"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/network"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/prompt"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/proxy"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/system"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/transport"
 )
 
 func handleQuickWizard(ctx *actions.Context) error {
@@ -93,6 +93,9 @@ func handleQuickWizard(ctx *actions.Context) error {
 			displayName := tr
 			if tr == config.TransportDNSTT {
 				displayName = "dnstt/noizdns"
+			} else if tr == config.TransportMasterDNS {
+				displayName = "masterdns"
+				domainHint = "md.example.com"
 			}
 			domain, err = prompt.String(fmt.Sprintf("Domain for %s (e.g. %s)", displayName, domainHint), "")
 			if err != nil {
@@ -104,7 +107,7 @@ func handleQuickWizard(ctx *actions.Context) error {
 		}
 
 		mtu := config.DefaultMTU
-		if tr == config.TransportDNSTT || tr == config.TransportVayDNS {
+		if tr == config.TransportDNSTT || tr == config.TransportVayDNS || tr == config.TransportMasterDNS {
 			mtuStr, err := prompt.String("MTU", fmt.Sprintf("%d", config.DefaultMTU))
 			if err != nil {
 				return err
@@ -233,6 +236,7 @@ func handleQuickWizard(ctx *actions.Context) error {
 	for _, s := range allSettings {
 		var sharedDNSTTKey string
 		var sharedDNSTTSrcDir string
+		var sharedMasterDNSKey string
 		for _, b := range s.backends {
 			tag := cfg.UniqueTag(s.transport)
 			tunnelDomain := s.domain
@@ -246,6 +250,8 @@ func handleQuickWizard(ctx *actions.Context) error {
 						sshHint = "ss." + parentDomain
 					} else if s.transport == config.TransportVayDNS {
 						sshHint = "vs." + parentDomain
+					} else if s.transport == config.TransportMasterDNS {
+						sshHint = "ms." + parentDomain
 					}
 					tunnelDomain, err = prompt.String(fmt.Sprintf("Domain for %s", tag), sshHint)
 					if err != nil {
@@ -335,6 +341,17 @@ func handleQuickWizard(ctx *actions.Context) error {
 					PrivateKey: privKeyPath,
 					PublicKey:  sharedDNSTTKey,
 					RecordType: s.recordType,
+				}
+
+			case config.TransportMasterDNS:
+				if sharedMasterDNSKey == "" {
+					out.Info(fmt.Sprintf("Generating encryption key for %s...", tunnelDomain))
+					sharedMasterDNSKey = system.GeneratePassword(32)
+					out.Success(fmt.Sprintf("Encryption Key: %s", sharedMasterDNSKey))
+				}
+				tunnel.MasterDNS = &config.MasterDNSConfig{
+					MTU:           s.mtu,
+					EncryptionKey: sharedMasterDNSKey,
 				}
 
 			case config.TransportSlipstream:
@@ -467,6 +484,9 @@ func handleQuickWizard(ctx *actions.Context) error {
 	} else if allTunnels[0].VayDNS != nil {
 		out.Print(fmt.Sprintf("    PubKey : %s", allTunnels[0].VayDNS.PublicKey))
 		out.Print(fmt.Sprintf("    MTU    : %d", allTunnels[0].VayDNS.MTU))
+	} else if allTunnels[0].MasterDNS != nil {
+		out.Print(fmt.Sprintf("    Encryption Key: %s", allTunnels[0].MasterDNS.EncryptionKey))
+		out.Print(fmt.Sprintf("    MTU           : %d", allTunnels[0].MasterDNS.MTU))
 	}
 
 	// DNS records
@@ -525,7 +545,15 @@ func handleQuickWizard(ctx *actions.Context) error {
 				label = strings.ReplaceAll(label, "dnstt", "noizdns")
 			}
 			out.Print(fmt.Sprintf("    [%s] %s", label, username))
-			out.Print(fmt.Sprintf("    %s", uri))
+			if t.Transport == config.TransportMasterDNS {
+				out.Print("      # MasterDnsVPN client basic setup snippet:")
+				out.Print(fmt.Sprintf("      DOMAIN = [\"%s\"]", t.Domain))
+				out.Print(fmt.Sprintf("      ENCRYPTION_KEY_FILE = \"%s\"", t.MasterDNS.EncryptionKey))
+				out.Print(fmt.Sprintf("      MAX_PACKET_SIZE = %d", t.MasterDNS.MTU))
+				out.Print("      PROTOCOL_TYPE = \"TCP\"")
+			} else {
+				out.Print(fmt.Sprintf("    %s", uri))
+			}
 			out.Print("")
 		}
 	}

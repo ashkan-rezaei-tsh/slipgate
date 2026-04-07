@@ -5,12 +5,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/anonvector/slipgate/internal/actions"
-	"github.com/anonvector/slipgate/internal/config"
-	"github.com/anonvector/slipgate/internal/keys"
-	"github.com/anonvector/slipgate/internal/prompt"
-	"github.com/anonvector/slipgate/internal/service"
-	"github.com/anonvector/slipgate/internal/transport"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/actions"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/config"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/keys"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/prompt"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/service"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/transport"
 )
 
 func handleTunnelEdit(ctx *actions.Context) error {

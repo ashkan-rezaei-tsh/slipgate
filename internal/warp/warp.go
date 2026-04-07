@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anonvector/slipgate/internal/config"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/config"
 )
 
 const (

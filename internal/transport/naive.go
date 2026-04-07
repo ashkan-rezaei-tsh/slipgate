@@ -6,9 +6,9 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/anonvector/slipgate/internal/config"
-	"github.com/anonvector/slipgate/internal/service"
-	"github.com/anonvector/slipgate/internal/warp"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/config"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/service"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/warp"
 )
 
 // createNaiveService creates the Caddyfile and systemd service for NaiveProxy.

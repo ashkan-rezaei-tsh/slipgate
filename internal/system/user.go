@@ -9,7 +9,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/anonvector/slipgate/internal/config"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/config"
 )
 
 // EnsureUser creates the slipgate system user and groups if they don't exist.

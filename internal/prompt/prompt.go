@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/anonvector/slipgate/internal/actions"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/actions"
 )
 
 // String asks for a string value with line editing support.

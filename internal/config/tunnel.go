@@ -2,6 +2,7 @@ package config
 
 // Transport types.
 const (
+	TransportMasterDNS  = "masterdns"
 	TransportDNSTT      = "dnstt"
 	TransportSlipstream = "slipstream"
 	TransportVayDNS     = "vaydns"
@@ -24,6 +25,7 @@ type TunnelConfig struct {
 	Slipstream *SlipstreamConfig `json:"slipstream,omitempty"`
 	VayDNS     *VayDNSConfig     `json:"vaydns,omitempty"`
 	Naive      *NaiveConfig      `json:"naive,omitempty"`
+	MasterDNS  *MasterDNSConfig  `json:"masterdns,omitempty"`
 }
 
 // DNSTTConfig holds config for DNSTT transport (serves both DNSTT and NoizDNS clients).
@@ -37,6 +39,12 @@ type DNSTTConfig struct {
 type SlipstreamConfig struct {
 	Cert string `json:"cert"` // path to cert file
 	Key  string `json:"key"`  // path to key file
+}
+
+// MasterDNSConfig holds config for MasterDnsVPN transport.
+type MasterDNSConfig struct {
+	MTU           int    `json:"mtu"`
+	EncryptionKey string `json:"encryption_key"` // pre-generated key for auth
 }
 
 // NaiveConfig holds config for naiveproxy transport.
@@ -112,7 +120,7 @@ func (v *VayDNSConfig) ResolvedClientIDSize() int {
 // IsDNSTunnel returns true if the transport uses DNS port 53.
 func (t *TunnelConfig) IsDNSTunnel() bool {
 	switch t.Transport {
-	case TransportDNSTT, TransportSlipstream, TransportVayDNS:
+	case TransportDNSTT, TransportSlipstream, TransportVayDNS, TransportMasterDNS:
 		return true
 	}
 	return false

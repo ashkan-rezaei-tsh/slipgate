@@ -4,10 +4,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/anonvector/slipgate/internal/actions"
-	"github.com/anonvector/slipgate/internal/prompt"
-	"github.com/anonvector/slipgate/internal/service"
-	"github.com/anonvector/slipgate/internal/system"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/actions"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/prompt"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/service"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/system"
 )
 
 const (

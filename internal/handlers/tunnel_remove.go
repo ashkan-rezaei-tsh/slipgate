@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/anonvector/slipgate/internal/actions"
-	"github.com/anonvector/slipgate/internal/config"
-	"github.com/anonvector/slipgate/internal/prompt"
-	"github.com/anonvector/slipgate/internal/router"
-	"github.com/anonvector/slipgate/internal/service"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/actions"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/config"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/prompt"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/router"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/service"
 )
 
 func handleTunnelRemove(ctx *actions.Context) error {

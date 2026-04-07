@@ -3,9 +3,9 @@ package router
 import (
 	"fmt"
 
-	"github.com/anonvector/slipgate/internal/config"
-	"github.com/anonvector/slipgate/internal/dnsrouter"
-	"github.com/anonvector/slipgate/internal/service"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/config"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/dnsrouter"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/service"
 )
 
 // SwitchMode is kept for backward compatibility but all tunnels now use the

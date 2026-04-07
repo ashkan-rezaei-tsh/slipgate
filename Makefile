@@ -1,12 +1,12 @@
 VERSION ?= 1.3.1
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-LDFLAGS  = -X github.com/anonvector/slipgate/internal/version.Version=$(VERSION) \
-           -X github.com/anonvector/slipgate/internal/version.Commit=$(COMMIT)
+LDFLAGS  = -X github.com/ashkan-rezaei-tsh/slipgate/internal/version.Version=$(VERSION) \
+           -X github.com/ashkan-rezaei-tsh/slipgate/internal/version.Commit=$(COMMIT)
 
 # Set RELEASE_TAG to pin binary downloads to a specific GitHub release.
 # Dev builds use this so transport binaries come from the dev release.
 ifdef RELEASE_TAG
-LDFLAGS += -X github.com/anonvector/slipgate/internal/version.ReleaseTag=$(RELEASE_TAG)
+LDFLAGS += -X github.com/ashkan-rezaei-tsh/slipgate/internal/version.ReleaseTag=$(RELEASE_TAG)
 endif
 
 .PHONY: build clean test install release build-dev

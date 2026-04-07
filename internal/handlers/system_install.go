@@ -7,19 +7,19 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/anonvector/slipgate/internal/actions"
-	"github.com/anonvector/slipgate/internal/binary"
-	"github.com/anonvector/slipgate/internal/certs"
-	"github.com/anonvector/slipgate/internal/clientcfg"
-	"github.com/anonvector/slipgate/internal/config"
-	"github.com/anonvector/slipgate/internal/dnsrouter"
-	"github.com/anonvector/slipgate/internal/keys"
-	"github.com/anonvector/slipgate/internal/network"
-	"github.com/anonvector/slipgate/internal/prompt"
-	"github.com/anonvector/slipgate/internal/proxy"
-	"github.com/anonvector/slipgate/internal/system"
-	"github.com/anonvector/slipgate/internal/transport"
-	"github.com/anonvector/slipgate/internal/warp"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/actions"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/binary"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/certs"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/clientcfg"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/config"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/dnsrouter"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/keys"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/network"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/prompt"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/proxy"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/system"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/transport"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/warp"
 )
 
 func handleSystemInstall(ctx *actions.Context) error {
@@ -98,7 +98,7 @@ func handleSystemInstall(ctx *actions.Context) error {
 	needsSOCKSPort := false
 	for _, t := range transports {
 		switch t {
-		case config.TransportDNSTT, config.TransportSlipstream, config.TransportVayDNS:
+		case config.TransportDNSTT, config.TransportSlipstream, config.TransportVayDNS, config.TransportMasterDNS:
 			needsDNS = true
 		case config.TransportNaive:
 			needsHTTPS = true
@@ -185,6 +185,8 @@ func handleSystemInstall(ctx *actions.Context) error {
 		displayName := selectedTransport
 		if selectedTransport == config.TransportDNSTT {
 			displayName = "dnstt/noizdns"
+		} else if selectedTransport == config.TransportMasterDNS {
+			displayName = "masterdns"
 		}
 
 		out.Print("")
@@ -236,6 +238,11 @@ func handleSystemInstall(ctx *actions.Context) error {
 			domainDefault = "v." + knownParent
 		case selectedTransport == config.TransportVayDNS:
 			domainHint = "v.example.com"
+		case selectedTransport == config.TransportMasterDNS && knownParent != "":
+			domainHint = "md." + knownParent
+			domainDefault = "md." + knownParent
+		case selectedTransport == config.TransportMasterDNS:
+			domainHint = "md.example.com"
 		case selectedTransport == config.TransportDNSTT && knownParent != "":
 			domainHint = "t." + knownParent
 			domainDefault = "t." + knownParent
@@ -256,7 +263,7 @@ func handleSystemInstall(ctx *actions.Context) error {
 
 		// Ask for MTU for DNS tunnels
 		mtu := config.DefaultMTU
-		if selectedTransport == config.TransportDNSTT || selectedTransport == config.TransportVayDNS {
+		if selectedTransport == config.TransportDNSTT || selectedTransport == config.TransportVayDNS || selectedTransport == config.TransportMasterDNS {
 			mtuStr, err := prompt.String("MTU", fmt.Sprintf("%d", config.DefaultMTU))
 			if err != nil {
 				return err
@@ -268,6 +275,7 @@ func handleSystemInstall(ctx *actions.Context) error {
 
 		var sharedNaive *config.NaiveConfig
 		var sharedDNSTTKey string // reuse same keypair for both backends
+		var sharedMasterDNSKey string
 		var sharedRecordType string
 
 		if selectedTransport == config.TransportVayDNS {
@@ -299,6 +307,8 @@ func handleSystemInstall(ctx *actions.Context) error {
 						sshHint = "ss." + parentDomain
 					} else if selectedTransport == config.TransportVayDNS {
 						sshHint = "vs." + parentDomain
+					} else if selectedTransport == config.TransportMasterDNS {
+						sshHint = "ms." + parentDomain
 					}
 					sshDomain, err := prompt.String(fmt.Sprintf("Domain for %s", tag), sshHint)
 					if err != nil {
@@ -401,6 +411,17 @@ func handleSystemInstall(ctx *actions.Context) error {
 					return actions.NewError(actions.SystemInstall, "cert generation failed", err)
 				}
 				tunnel.Slipstream = &config.SlipstreamConfig{Cert: certPath, Key: keyPath}
+
+			case config.TransportMasterDNS:
+				if sharedMasterDNSKey == "" {
+					out.Info(fmt.Sprintf("Generating encryption key for %s...", tunnelDomain))
+					sharedMasterDNSKey = system.GeneratePassword(32)
+					out.Success(fmt.Sprintf("Encryption Key: %s", sharedMasterDNSKey))
+				}
+				tunnel.MasterDNS = &config.MasterDNSConfig{
+					MTU:           mtu,
+					EncryptionKey: sharedMasterDNSKey,
+				}
 
 			case config.TransportNaive:
 				if bIdx == 0 {
@@ -646,6 +667,9 @@ func handleSystemInstall(ctx *actions.Context) error {
 	} else if len(allTunnels) > 0 && allTunnels[0].VayDNS != nil {
 		out.Print(fmt.Sprintf("    Public Key: %s", allTunnels[0].VayDNS.PublicKey))
 		out.Print(fmt.Sprintf("    MTU       : %d", allTunnels[0].VayDNS.MTU))
+	} else if len(allTunnels) > 0 && allTunnels[0].MasterDNS != nil {
+		out.Print(fmt.Sprintf("    Encryption Key: %s", allTunnels[0].MasterDNS.EncryptionKey))
+		out.Print(fmt.Sprintf("    MTU           : %d", allTunnels[0].MasterDNS.MTU))
 	}
 
 	out.Print("")
@@ -715,7 +739,16 @@ func handleSystemInstall(ctx *actions.Context) error {
 				} else {
 					out.Print(fmt.Sprintf("    [%s] (no auth)", label))
 				}
-				out.Print(fmt.Sprintf("    %s", uri))
+				// MasterDnsVPN does not use a slipnet:// url
+				if t.Transport == config.TransportMasterDNS {
+					out.Print("    # MasterDnsVPN client basic setup snippet:")
+					out.Print(fmt.Sprintf("    DOMAIN = [\"%s\"]", t.Domain))
+					out.Print(fmt.Sprintf("    ENCRYPTION_KEY_FILE = \"%s\"", t.MasterDNS.EncryptionKey))
+					out.Print(fmt.Sprintf("    MAX_PACKET_SIZE = %d", t.MasterDNS.MTU))
+					out.Print("    PROTOCOL_TYPE = \"TCP\"")
+				} else {
+					out.Print(fmt.Sprintf("    %s", uri))
+				}
 				out.Print("")
 			}
 		}

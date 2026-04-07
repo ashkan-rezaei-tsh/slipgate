@@ -6,14 +6,15 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/anonvector/slipgate/internal/actions"
-	"github.com/anonvector/slipgate/internal/certs"
-	"github.com/anonvector/slipgate/internal/config"
-	"github.com/anonvector/slipgate/internal/keys"
-	"github.com/anonvector/slipgate/internal/network"
-	"github.com/anonvector/slipgate/internal/prompt"
-	"github.com/anonvector/slipgate/internal/router"
-	"github.com/anonvector/slipgate/internal/transport"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/actions"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/certs"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/config"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/keys"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/network"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/prompt"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/router"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/system"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/transport"
 )
 
 func handleTunnelAdd(ctx *actions.Context) error {
@@ -220,6 +221,34 @@ func addSingleTunnel(ctx *actions.Context, cfg *config.Config, transport_, backe
 			Cert: certPath,
 			Key:  keyPath,
 		}
+
+	case config.TransportMasterDNS:
+		mtuStr, err := prompt.String("MTU", fmt.Sprintf("%d", config.DefaultMTU))
+		if err != nil {
+			return err
+		}
+		mtu := config.DefaultMTU
+		if n, e := fmt.Sscanf(mtuStr, "%d", &mtu); n != 1 || e != nil {
+			mtu = config.DefaultMTU
+		}
+
+		// Pre-generate a 32-character hex key for the tunnel
+		encryptionKey := ctx.GetArg("encryption-key")
+		if encryptionKey == "" && sharedKeyDir != "" {
+			out.Info("Reusing shared encryption key...")
+			if keyBytes, err := os.ReadFile(filepath.Join(sharedKeyDir, "encrypt_key.txt")); err == nil {
+				encryptionKey = strings.TrimSpace(string(keyBytes))
+			}
+		}
+		if encryptionKey == "" {
+			encryptionKey = system.GeneratePassword(32)
+		}
+
+		tunnel.MasterDNS = &config.MasterDNSConfig{
+			MTU:           mtu,
+			EncryptionKey: encryptionKey,
+		}
+		out.Success(fmt.Sprintf("MasterDnsVPN Encryption Key: %s", encryptionKey))
 
 	case config.TransportVayDNS:
 		privKeyPath := filepath.Join(tunnelDir, "server.key")

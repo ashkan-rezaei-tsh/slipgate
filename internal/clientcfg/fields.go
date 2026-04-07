@@ -1,6 +1,6 @@
 package clientcfg
 
-import "github.com/anonvector/slipgate/internal/config"
+import "github.com/ashkan-rezaei-tsh/slipgate/internal/config"
 
 // v17 field positions (pipe-delimited, 38 fields).
 // Matches the SlipNet Android app's ConfigImporter/ConfigExporter.

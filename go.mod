@@ -1,4 +1,4 @@
-module github.com/anonvector/slipgate
+module github.com/ashkan-rezaei-tsh/slipgate
 
 go 1.25.0
 

@@ -28,13 +28,13 @@ Unified tunnel manager for Linux servers. Manages DNS tunnels (DNSTT, NoizDNS, S
 **One-liner install:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/anonvector/slipgate/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/ashkan-rezaei-tsh/slipgate/main/install.sh | sudo bash
 ```
 
 **Or build from source:**
 
 ```bash
-git clone https://github.com/anonvector/slipgate.git
+git clone https://github.com/ashkan-rezaei-tsh/slipgate.git
 cd slipgate
 make build
 sudo ./slipgate install
@@ -42,15 +42,15 @@ sudo ./slipgate install
 
 **Offline install (SCP to server):**
 
-Download the binaries you need from the [latest release](https://github.com/anonvector/slipgate/releases):
+Download the binaries you need from the [latest release](https://github.com/ashkan-rezaei-tsh/slipgate/releases):
 
 ```bash
 # On your local machine — download binaries
 mkdir slipgate-bundle && cd slipgate-bundle
-curl -LO https://github.com/anonvector/slipgate/releases/latest/download/slipgate-linux-amd64
-curl -LO https://github.com/anonvector/slipgate/releases/latest/download/dnstt-server-linux-amd64
-curl -LO https://github.com/anonvector/slipgate/releases/latest/download/slipstream-server-linux-amd64
-curl -LO https://github.com/anonvector/slipgate/releases/latest/download/caddy-naive-linux-amd64
+curl -LO https://github.com/ashkan-rezaei-tsh/slipgate/releases/latest/download/slipgate-linux-amd64
+curl -LO https://github.com/ashkan-rezaei-tsh/slipgate/releases/latest/download/dnstt-server-linux-amd64
+curl -LO https://github.com/ashkan-rezaei-tsh/slipgate/releases/latest/download/slipstream-server-linux-amd64
+curl -LO https://github.com/ashkan-rezaei-tsh/slipgate/releases/latest/download/caddy-naive-linux-amd64
 
 # SCP to server
 scp * user@server:/tmp/slipgate/

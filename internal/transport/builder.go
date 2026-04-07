@@ -3,8 +3,8 @@ package transport
 import (
 	"fmt"
 
-	"github.com/anonvector/slipgate/internal/config"
-	"github.com/anonvector/slipgate/internal/service"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/config"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/service"
 )
 
 // CreateService creates and starts a systemd service for a tunnel.
@@ -14,6 +14,8 @@ func CreateService(tunnel *config.TunnelConfig, cfg *config.Config) error {
 		return createDNSTTService(tunnel, cfg)
 	case config.TransportSlipstream:
 		return createSlipstreamService(tunnel, cfg)
+	case config.TransportMasterDNS:
+		return createMasterDNSService(tunnel, cfg)
 	case config.TransportVayDNS:
 		return createVayDNSService(tunnel, cfg)
 	case config.TransportNaive:

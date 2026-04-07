@@ -3,8 +3,8 @@ package dnsrouter
 import (
 	"os"
 
-	"github.com/anonvector/slipgate/internal/config"
-	"github.com/anonvector/slipgate/internal/service"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/config"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/service"
 )
 
 const serviceName = "slipgate-dnsrouter"

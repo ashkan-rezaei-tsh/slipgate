@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/anonvector/slipgate/internal/actions"
-	"github.com/anonvector/slipgate/internal/config"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/actions"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/config"
 )
 
 func handleConfigExport(ctx *actions.Context) error {

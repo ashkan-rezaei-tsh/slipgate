@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/anonvector/slipgate/internal/proxy"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/proxy"
 	"github.com/spf13/cobra"
 )
 

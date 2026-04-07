@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/anonvector/slipgate/internal/actions"
-	"github.com/anonvector/slipgate/internal/handlers"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/actions"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/handlers"
 	"github.com/spf13/cobra"
 )
 

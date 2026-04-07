@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/anonvector/slipgate/internal/config"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/config"
 )
 
 // buildDNSTTExecStart builds the ExecStart command for dnstt-server.

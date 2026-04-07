@@ -3,12 +3,12 @@ package handlers
 import (
 	"fmt"
 
-	"github.com/anonvector/slipgate/internal/actions"
-	"github.com/anonvector/slipgate/internal/config"
-	"github.com/anonvector/slipgate/internal/prompt"
-	"github.com/anonvector/slipgate/internal/proxy"
-	"github.com/anonvector/slipgate/internal/transport"
-	"github.com/anonvector/slipgate/internal/warp"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/actions"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/config"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/prompt"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/proxy"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/transport"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/warp"
 )
 
 func handleWarp(ctx *actions.Context) error {

@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/anonvector/slipgate/internal/dnsrouter"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/dnsrouter"
 	"github.com/spf13/cobra"
 )
 

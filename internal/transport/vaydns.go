@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/anonvector/slipgate/internal/config"
-	"github.com/anonvector/slipgate/internal/service"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/config"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/service"
 )
 
 func createVayDNSService(tunnel *config.TunnelConfig, cfg *config.Config) error {

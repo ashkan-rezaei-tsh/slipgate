@@ -7,15 +7,15 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/anonvector/slipgate/internal/actions"
-	"github.com/anonvector/slipgate/internal/binary"
-	"github.com/anonvector/slipgate/internal/config"
-	"github.com/anonvector/slipgate/internal/network"
-	"github.com/anonvector/slipgate/internal/proxy"
-	"github.com/anonvector/slipgate/internal/service"
-	"github.com/anonvector/slipgate/internal/transport"
-	"github.com/anonvector/slipgate/internal/version"
-	"github.com/anonvector/slipgate/internal/warp"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/actions"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/binary"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/config"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/network"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/proxy"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/service"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/transport"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/version"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/warp"
 )
 
 func handleSystemUpdate(ctx *actions.Context) error {

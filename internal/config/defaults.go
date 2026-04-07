@@ -63,4 +63,5 @@ var TransportBinaries = map[string]string{
 	TransportSlipstream: "slipstream-server",
 	TransportVayDNS:     "vaydns-server",
 	TransportNaive:      "caddy-naive",
+	TransportMasterDNS:  "masterdnsvpn-server",
 }

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/anonvector/slipgate/internal/config"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/config"
 )
 
 // buildSlipstreamExecStart builds the ExecStart for slipstream-server.

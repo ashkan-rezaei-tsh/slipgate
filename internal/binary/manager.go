@@ -12,13 +12,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anonvector/slipgate/internal/config"
-	"github.com/anonvector/slipgate/internal/version"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/config"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/version"
 )
 
 var httpClient = &http.Client{Timeout: 120 * time.Second}
 
-const releaseBaseURL = "https://github.com/anonvector/slipgate/releases"
+const releaseBaseURL = "https://github.com/ashkan-rezaei-tsh/slipgate/releases"
 
 // OfflineDir, when set, makes EnsureInstalled copy binaries from this
 // directory instead of downloading. Used for SCP/offline installs.
@@ -26,7 +26,7 @@ var OfflineDir string
 
 const (
 	stableDownloadBase = releaseBaseURL + "/latest/download"
-	repoAPI            = "https://api.github.com/repos/anonvector/slipgate/releases"
+	repoAPI            = "https://api.github.com/repos/ashkan-rezaei-tsh/slipgate/releases"
 )
 
 // DownloadBase returns the base URL for slipgate binary downloads.
@@ -77,10 +77,11 @@ func latestDevTag() string {
 // of dev/stable channel — they are not included in dev pre-releases.
 func binaryURLTemplates() map[string]string {
 	return map[string]string{
-		"dnstt-server":      stableDownloadBase + "/dnstt-server-%s-%s",
-		"slipstream-server": stableDownloadBase + "/slipstream-server-%s-%s",
-		"vaydns-server":     "https://github.com/net2share/vaydns/releases/download/v0.2.7/vaydns-server-%s-%s",
-		"caddy-naive":       stableDownloadBase + "/caddy-naive-%s-%s",
+		"dnstt-server":        stableDownloadBase + "/dnstt-server-%s-%s",
+		"slipstream-server":   stableDownloadBase + "/slipstream-server-%s-%s",
+		"vaydns-server":       "https://github.com/net2share/vaydns/releases/download/v0.2.7/vaydns-server-%s-%s",
+		"caddy-naive":         stableDownloadBase + "/caddy-naive-%s-%s",
+		"masterdnsvpn-server": "https://github.com/masterking32/MasterDnsVPN/releases/latest/download/MasterDnsVPN_Server_%s_%s.zip",
 	}
 }
 
@@ -103,10 +104,84 @@ func EnsureInstalled(name string) error {
 		return fmt.Errorf("unknown binary: %s", name)
 	}
 
+	if name == "masterdnsvpn-server" {
+		return installMasterDnsVPN(binPath, urlTemplate)
+	}
+
 	url := fmt.Sprintf(urlTemplate, runtime.GOOS, runtime.GOARCH)
 	if err := downloadTo(url, binPath, 0755); err != nil {
 		return fmt.Errorf("download %s from %s: %w", name, url, err)
 	}
+	return nil
+}
+
+func installMasterDnsVPN(binPath, urlTemplate string) error {
+	osName := "Linux"
+	archName := ""
+	switch runtime.GOARCH {
+	case "amd64":
+		archName = "AMD64"
+	case "arm64":
+		archName = "ARM64"
+	default:
+		return fmt.Errorf("unsupported arch for masterdns: %s", runtime.GOARCH)
+	}
+
+	url := fmt.Sprintf(urlTemplate, osName, archName)
+	
+	// Download zip
+	tmpZip, err := os.CreateTemp("", "masterdns-*.zip")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmpZip.Name())
+	
+	if err := downloadToWriter(url, tmpZip); err != nil {
+		tmpZip.Close()
+		return fmt.Errorf("failed to download masterdnsvpn zip: %w", err)
+	}
+	tmpZip.Close()
+
+	// Create temp dir to extract into
+	tmpDir, err := os.MkdirTemp("", "masterdns-extract-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	unzipCmd := exec.Command("unzip", "-q", "-o", tmpZip.Name(), "-d", tmpDir)
+	if err := unzipCmd.Run(); err != nil {
+		return fmt.Errorf("failed to extract masterdnsvpn: %w", err)
+	}
+
+	// Find the executable (MasterDnsVPN_Server_Linux_AMD64_v...)
+	entries, err := os.ReadDir(tmpDir)
+	if err != nil {
+		return err
+	}
+
+	var exePath string
+	basePrefix := fmt.Sprintf("MasterDnsVPN_Server_%s_%s_v", osName, archName)
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasPrefix(entry.Name(), basePrefix) {
+			exePath = filepath.Join(tmpDir, entry.Name())
+			break
+		}
+	}
+
+	if exePath == "" {
+		return fmt.Errorf("could not find executable in masterdnsvpn release zip")
+	}
+
+	// Move to binPath
+	if err := os.Rename(exePath, binPath); err != nil {
+		cpCmd := exec.Command("cp", exePath, binPath)
+		if err := cpCmd.Run(); err != nil {
+			return fmt.Errorf("install binary: %w", err)
+		}
+	}
+	os.Chmod(binPath, 0755)
+
 	return nil
 }
 

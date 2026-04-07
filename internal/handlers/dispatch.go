@@ -3,7 +3,7 @@ package handlers
 import (
 	"fmt"
 
-	"github.com/anonvector/slipgate/internal/actions"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/actions"
 )
 
 type handlerFunc func(ctx *actions.Context) error

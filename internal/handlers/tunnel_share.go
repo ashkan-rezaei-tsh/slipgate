@@ -1,10 +1,12 @@
 package handlers
 
 import (
-	"github.com/anonvector/slipgate/internal/actions"
-	"github.com/anonvector/slipgate/internal/clientcfg"
-	"github.com/anonvector/slipgate/internal/config"
-	"github.com/anonvector/slipgate/internal/prompt"
+	"fmt"
+
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/actions"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/clientcfg"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/config"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/prompt"
 )
 
 func handleTunnelShare(ctx *actions.Context) error {
@@ -55,6 +57,15 @@ func handleTunnelShare(ctx *actions.Context) error {
 			opts.Username = user.Username
 			opts.Password = user.Password
 		}
+	}
+
+	if tunnel.Transport == config.TransportMasterDNS {
+		ctx.Output.Print("# MasterDnsVPN client basic setup snippet:")
+		ctx.Output.Print(fmt.Sprintf("DOMAIN = [\"%s\"]", tunnel.Domain))
+		ctx.Output.Print(fmt.Sprintf("ENCRYPTION_KEY_FILE = \"%s\"", tunnel.MasterDNS.EncryptionKey))
+		ctx.Output.Print(fmt.Sprintf("MAX_PACKET_SIZE = %d", tunnel.MasterDNS.MTU))
+		ctx.Output.Print("PROTOCOL_TYPE = \"TCP\"")
+		return nil
 	}
 
 	uri, err := clientcfg.GenerateURI(tunnel, backend, cfg, opts)

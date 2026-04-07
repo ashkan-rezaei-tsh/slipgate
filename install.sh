@@ -2,7 +2,7 @@
 # SlipGate installer — download binary and run `slipgate install`
 set -e
 
-REPO="anonvector/slipgate"
+REPO="ashkan-rezaei-tsh/slipgate"
 INSTALL_DIR="/usr/local/bin"
 
 # Colors

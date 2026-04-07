@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anonvector/slipgate/internal/config"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/config"
 )
 
 // Router is a pure Go DNS forwarder that routes queries by domain.

@@ -1,8 +1,8 @@
 package router
 
 import (
-	"github.com/anonvector/slipgate/internal/config"
-	"github.com/anonvector/slipgate/internal/service"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/config"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/service"
 )
 
 // ServiceName returns the systemd service name for a tunnel.

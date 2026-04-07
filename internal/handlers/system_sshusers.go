@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/anonvector/slipgate/internal/actions"
-	"github.com/anonvector/slipgate/internal/clientcfg"
-	"github.com/anonvector/slipgate/internal/config"
-	"github.com/anonvector/slipgate/internal/prompt"
-	"github.com/anonvector/slipgate/internal/proxy"
-	"github.com/anonvector/slipgate/internal/system"
-	"github.com/anonvector/slipgate/internal/warp"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/actions"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/clientcfg"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/config"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/prompt"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/proxy"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/system"
+	"github.com/ashkan-rezaei-tsh/slipgate/internal/warp"
 )
 
 func handleSystemUsers(ctx *actions.Context) error {
@@ -187,6 +187,8 @@ func showUserConfigs(cfg *config.Config, username, password string, out actions.
 			out.Print(fmt.Sprintf("  [%s] Public Key: %s", t.Tag, t.DNSTT.PublicKey))
 		} else if t.Transport == config.TransportVayDNS && t.VayDNS != nil && t.VayDNS.PublicKey != "" {
 			out.Print(fmt.Sprintf("  [%s] Public Key: %s", t.Tag, t.VayDNS.PublicKey))
+		} else if t.Transport == config.TransportMasterDNS && t.MasterDNS != nil {
+			out.Print(fmt.Sprintf("  [%s] Encryption Key: %s", t.Tag, t.MasterDNS.EncryptionKey))
 		}
 
 		modes := []string{""}
@@ -209,7 +211,15 @@ func showUserConfigs(cfg *config.Config, username, password string, out actions.
 				label = strings.ReplaceAll(label, "dnstt", "noizdns")
 			}
 			out.Print(fmt.Sprintf("  [%s]", label))
-			out.Print(fmt.Sprintf("  %s", uri))
+			if t.Transport == config.TransportMasterDNS {
+				out.Print("    # MasterDnsVPN client basic setup snippet:")
+				out.Print(fmt.Sprintf("    DOMAIN = [\"%s\"]", t.Domain))
+				out.Print(fmt.Sprintf("    ENCRYPTION_KEY_FILE = \"%s\"", t.MasterDNS.EncryptionKey))
+				out.Print(fmt.Sprintf("    MAX_PACKET_SIZE = %d", t.MasterDNS.MTU))
+				out.Print("    PROTOCOL_TYPE = \"TCP\"")
+			} else {
+				out.Print(fmt.Sprintf("  %s", uri))
+			}
 			out.Print("")
 		}
 	}
