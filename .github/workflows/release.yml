@@ -57,6 +57,10 @@ jobs:
           tag_name: ${{ env.RELEASE_TAG }}
           name: Release ${{ env.RELEASE_TAG }}
           prerelease: ${{ startsWith(env.RELEASE_TAG, 'dev-') }}
-          files: slipgate-linux-*
+          files: |
+            slipgate-*
+            dnstt-server-*
+            slipstream-server-*
+            caddy-naive-*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
