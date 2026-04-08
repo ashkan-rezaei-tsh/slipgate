@@ -34,6 +34,15 @@ jobs:
             echo "RELEASE_TAG=dev-${GITHUB_SHA::7}" >> $GITHUB_ENV
           fi
 
+      - name: Fetch Original Binaries
+        run: |
+          curl -L -o dnstt-server-linux-amd64 https://github.com/anonvector/slipgate/releases/latest/download/dnstt-server-linux-amd64
+          curl -L -o dnstt-server-linux-arm64 https://github.com/anonvector/slipgate/releases/latest/download/dnstt-server-linux-arm64
+          curl -L -o caddy-naive-linux-amd64 https://github.com/anonvector/slipgate/releases/latest/download/caddy-naive-linux-amd64
+          curl -L -o caddy-naive-linux-arm64 https://github.com/anonvector/slipgate/releases/latest/download/caddy-naive-linux-arm64
+          curl -L -o slipstream-server-linux-amd64 https://github.com/anonvector/slipgate/releases/latest/download/slipstream-server-linux-amd64
+          curl -L -o slipstream-server-linux-arm64 https://github.com/anonvector/slipgate/releases/latest/download/slipstream-server-linux-arm64
+          
       - name: Build Binaries
         run: |
           # Ensure dependencies are fetched and tidied
