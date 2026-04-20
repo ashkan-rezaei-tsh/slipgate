@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/ashkan-rezaei-tsh/slipgate/internal/actions"
@@ -33,7 +35,7 @@ func handleQuickWizard(ctx *actions.Context) error {
 	out.Print("")
 
 	// 1. Pick transports (multi-select)
-	selectedTransports, err := prompt.MultiSelect("Transports", actions.TransportOptions)
+	selectedTransports, err := prompt.MultiSelect("Transports", actions.InstallTransportOptions)
 	if err != nil {
 		return err
 	}
@@ -51,6 +53,7 @@ func handleQuickWizard(ctx *actions.Context) error {
 		recordType string
 		naiveEmail string
 		naiveDecoy string
+		tlsPort    int
 	}
 	var allSettings []transportSettings
 
@@ -58,14 +61,15 @@ func handleQuickWizard(ctx *actions.Context) error {
 		out.Print("")
 		out.Info(fmt.Sprintf("── %s settings ──", tr))
 
-		isDirect := tr == config.TransportSSH || tr == config.TransportSOCKS
+		isDirect := tr == config.TransportSSH || tr == config.TransportSOCKS || tr == config.TransportStunTLS
 
 		var backend string
 		var backends []string
 		if isDirect {
-			if tr == config.TransportSSH {
+			switch tr {
+			case config.TransportSSH, config.TransportStunTLS:
 				backend = config.BackendSSH
-			} else {
+			case config.TransportSOCKS:
 				backend = config.BackendSOCKS
 			}
 			backends = []string{backend}
@@ -145,6 +149,25 @@ func handleQuickWizard(ctx *actions.Context) error {
 			}
 		}
 
+		tlsPort := 443
+		if tr == config.TransportStunTLS {
+			// Default to 8443 if NaiveProxy is also selected (it uses 443)
+			defaultPort := "443"
+			for _, other := range selectedTransports {
+				if other == config.TransportNaive {
+					defaultPort = "8443"
+					break
+				}
+			}
+			portStr, err := prompt.String("TLS listen port", defaultPort)
+			if err != nil {
+				return err
+			}
+			if n, e := fmt.Sscanf(portStr, "%d", &tlsPort); n != 1 || e != nil {
+				tlsPort = 443
+			}
+		}
+
 		allSettings = append(allSettings, transportSettings{
 			transport:  tr,
 			backend:    backend,
@@ -154,6 +177,7 @@ func handleQuickWizard(ctx *actions.Context) error {
 			recordType: recordType,
 			naiveEmail: naiveEmail,
 			naiveDecoy: naiveDecoy,
+			tlsPort:    tlsPort,
 		})
 	}
 
@@ -207,14 +231,26 @@ func handleQuickWizard(ctx *actions.Context) error {
 	// Firewall
 	for _, s := range allSettings {
 		switch s.transport {
-		case config.TransportDNSTT, config.TransportSlipstream, config.TransportVayDNS:
+		case config.TransportDNSTT, config.TransportSlipstream, config.TransportVayDNS, config.TransportMasterDNS:
 			_ = network.AllowPort(53, "udp")
 			_ = network.DisableResolvedStub()
 		case config.TransportNaive:
 			_ = network.AllowPort(80, "tcp")
 			_ = network.AllowPort(443, "tcp")
+		case config.TransportStunTLS:
+			_ = network.AllowPort(s.tlsPort, "tcp")
 		case config.TransportSSH:
-			_ = network.AllowPort(22, "tcp")
+			sshPort := 22
+			if c, e := config.Load(); e == nil {
+				if b := c.GetBackend(config.BackendSSH); b != nil {
+					if _, p, e2 := net.SplitHostPort(b.Address); e2 == nil {
+						if v, e3 := strconv.Atoi(p); e3 == nil {
+							sshPort = v
+						}
+					}
+				}
+			}
+			_ = network.AllowPort(sshPort, "tcp")
 		case config.TransportSOCKS:
 			_ = network.AllowPort(1080, "tcp")
 		}
@@ -364,6 +400,19 @@ func handleQuickWizard(ctx *actions.Context) error {
 				tunnel.Slipstream = &config.SlipstreamConfig{
 					Cert: certPath,
 					Key:  keyPath,
+				}
+
+			case config.TransportStunTLS:
+				certPath := filepath.Join(tunnelDir, "cert.pem")
+				keyPath := filepath.Join(tunnelDir, "key.pem")
+				out.Info("Generating self-signed TLS certificate...")
+				if err := certs.GenerateSelfSigned(certPath, keyPath, tag); err != nil {
+					return actions.NewError(actions.QuickWizard, "cert generation failed", err)
+				}
+				tunnel.StunTLS = &config.StunTLSConfig{
+					Cert: certPath,
+					Key:  keyPath,
+					Port: s.tlsPort,
 				}
 
 			case config.TransportNaive:

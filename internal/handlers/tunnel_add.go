@@ -35,14 +35,19 @@ func handleTunnelAdd(ctx *actions.Context) error {
 		}
 	}
 	// Direct transports have an implicit backend
-	isDirect := transport_ == config.TransportSSH || transport_ == config.TransportSOCKS
+	isDirect := transport_ == config.TransportSSH || transport_ == config.TransportSOCKS || transport_ == config.TransportStunTLS
 	if isDirect {
 		switch transport_ {
 		case config.TransportSSH:
 			backend = config.BackendSSH
 		case config.TransportSOCKS:
 			backend = config.BackendSOCKS
+		case config.TransportStunTLS:
+			backend = config.BackendSSH
 		}
+	}
+	if transport_ == config.TransportExternal {
+		backend = "external"
 	}
 	if backend == "" {
 		var err error
@@ -138,8 +143,8 @@ func addSingleTunnel(ctx *actions.Context, cfg *config.Config, transport_, backe
 		Enabled:   true,
 	}
 
-	// Assign port for DNS tunnels
-	if tunnel.IsDNSTunnel() {
+	// Assign port for DNS tunnels (external tunnels get their port from user input)
+	if tunnel.HasManagedService() {
 		tunnel.Port = cfg.NextAvailablePort()
 	}
 
@@ -378,6 +383,53 @@ func addSingleTunnel(ctx *actions.Context, cfg *config.Config, transport_, backe
 		tunnel.VayDNS = vayCfg
 		out.Success(fmt.Sprintf("Public key: %s", pubKey))
 
+	case config.TransportStunTLS:
+		certPath := filepath.Join(tunnelDir, "cert.pem")
+		keyPath := filepath.Join(tunnelDir, "key.pem")
+		out.Info("Generating self-signed TLS certificate...")
+		if err := certs.GenerateSelfSigned(certPath, keyPath, tag); err != nil {
+			return actions.NewError(actions.TunnelAdd, "cert generation failed", err)
+		}
+		portStr, err := prompt.String("TLS listen port", "443")
+		if err != nil {
+			return err
+		}
+		tlsPort := 443
+		if n, e := fmt.Sscanf(portStr, "%d", &tlsPort); n != 1 || e != nil {
+			tlsPort = 443
+		}
+		tunnel.StunTLS = &config.StunTLSConfig{
+			Cert: certPath,
+			Key:  keyPath,
+			Port: tlsPort,
+		}
+
+	case config.TransportExternal:
+		// Suggest a port that doesn't conflict with existing tunnels
+		defaultPort := 5301
+		usedPorts := make(map[int]bool)
+		for _, t := range cfg.Tunnels {
+			if t.Port > 0 {
+				usedPorts[t.Port] = true
+			}
+		}
+		for usedPorts[defaultPort] {
+			defaultPort++
+		}
+		portStr := ctx.GetArg("port")
+		if portStr == "" {
+			var err error
+			portStr, err = prompt.String("Target UDP port", fmt.Sprintf("%d", defaultPort))
+			if err != nil {
+				return err
+			}
+		}
+		extPort := defaultPort
+		if n, e := fmt.Sscanf(portStr, "%d", &extPort); n != 1 || e != nil {
+			extPort = defaultPort
+		}
+		tunnel.Port = extPort
+
 	case config.TransportNaive:
 		email := ctx.GetArg("email")
 		if email == "" {
@@ -441,13 +493,15 @@ func addSingleTunnel(ctx *actions.Context, cfg *config.Config, transport_, backe
 	if tunnel.IsDNSTunnel() {
 		_ = network.AllowPort(53, "udp")
 		_ = network.DisableResolvedStub()
-		if tunnel.Port > 0 {
+		if tunnel.Port > 0 && tunnel.HasManagedService() {
 			network.FreePort(tunnel.Port, "udp")
 		}
 	}
 
-	// Create and start systemd service
-	out.Info("Creating systemd service...")
+	// Create and start systemd service (skip message for external — user manages their own)
+	if transport_ != config.TransportExternal {
+		out.Info("Creating systemd service...")
+	}
 	if err := transport.CreateService(&tunnel, cfg); err != nil {
 		return actions.NewError(actions.TunnelAdd, "failed to create service", err)
 	}
@@ -456,7 +510,11 @@ func addSingleTunnel(ctx *actions.Context, cfg *config.Config, transport_, backe
 		out.Warning("Failed to register with router: " + err.Error())
 	}
 
-	out.Success(fmt.Sprintf("Tunnel %q created and started", tag))
-	out.Info(fmt.Sprintf("Share with: slipgate tunnel share %s", tag))
+	if transport_ == config.TransportExternal {
+		out.Success(fmt.Sprintf("Tunnel %q created — DNS queries for %s will route to 127.0.0.1:%d", tag, domain, tunnel.Port))
+	} else {
+		out.Success(fmt.Sprintf("Tunnel %q created and started", tag))
+		out.Info(fmt.Sprintf("Share with: slipgate tunnel share %s", tag))
+	}
 	return nil
 }

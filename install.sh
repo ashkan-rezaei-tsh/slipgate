@@ -30,20 +30,23 @@ OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 
 BINARY="slipgate-${OS}-${ARCH}"
 
-# When fetched from the dev branch, find the latest dev-* pre-release;
-# otherwise use the latest stable release.
-# Can also be overridden: SLIPGATE_RELEASE_TAG=dev-abc1234 bash install.sh
+# Override with: SLIPGATE_RELEASE_TAG=v1.5.1 bash install.sh
 RELEASE_TAG="${SLIPGATE_RELEASE_TAG:-}"
 CHANNEL="dev"  # ← set to "dev" on dev branch, empty on main
-if [[ -z "$RELEASE_TAG" && "$CHANNEL" == "dev" ]]; then
-    {
-        RELEASE_TAG=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases" \
-            | grep -o '"tag_name": *"dev-[^"]*"' | head -1 | cut -d'"' -f4 || true)
-    }
-fi
 
 if [[ -n "$RELEASE_TAG" ]]; then
     URL="https://github.com/${REPO}/releases/download/${RELEASE_TAG}/${BINARY}"
+elif [[ "$CHANNEL" == "dev" ]]; then
+    # Find the latest dev pre-release tag via GitHub API
+    DEV_TAG=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases" \
+        | grep -o '"tag_name": *"[^"]*-dev"' | head -1 | grep -o '"[^"]*-dev"' | tr -d '"')
+    if [[ -n "$DEV_TAG" ]]; then
+        URL="https://github.com/${REPO}/releases/download/${DEV_TAG}/${BINARY}"
+        info "Dev channel: using release ${DEV_TAG}"
+    else
+        URL="https://github.com/${REPO}/releases/latest/download/${BINARY}"
+        info "No dev release found, falling back to latest stable"
+    fi
 else
     URL="https://github.com/${REPO}/releases/latest/download/${BINARY}"
 fi

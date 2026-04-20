@@ -60,12 +60,13 @@ func latestDevTag() string {
 	}
 	var releases []struct {
 		TagName string `json:"tag_name"`
+		Prerelease bool   `json:"prerelease"`
 	}
 	if json.Unmarshal(body, &releases) != nil {
 		return ""
 	}
 	for _, r := range releases {
-		if strings.HasPrefix(r.TagName, "dev-") {
+		if r.Prerelease && strings.HasSuffix(r.TagName, "-dev") {
 			return r.TagName
 		}
 	}

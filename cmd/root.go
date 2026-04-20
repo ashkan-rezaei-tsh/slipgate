@@ -17,7 +17,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "slipgate",
 	Short: "Unified server tunnel manager",
-	Long:  "SlipGate manages DNS tunnels (DNSTT, NoizDNS, Slipstream, VayDNS) and HTTPS proxies (NaiveProxy) with systemd services.",
+	Long:  "SlipGate manages DNS tunnels (DNSTT, NoizDNS, Slipstream, VayDNS, MasterDNS) and HTTPS proxies (NaiveProxy) with systemd services.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if v, _ := cmd.Flags().GetBool("version"); v {
 			cmd.Println(version.String())

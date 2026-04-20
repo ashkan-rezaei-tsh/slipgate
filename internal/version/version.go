@@ -3,14 +3,23 @@ package version
 import "fmt"
 
 var (
-	Version    = "1.7.0"
+	Version    = "1.8.0"
 	Commit     = "unknown"
 	ReleaseTag = "" // set via ldflags for dev builds (e.g. "dev-abc1234")
 )
 
 func String() string {
-	if Commit == "unknown" {
-		return fmt.Sprintf("slipgate v%s", Version)
+	tag := ""
+	if ReleaseTag != "" {
+		tag = "-dev"
 	}
-	return fmt.Sprintf("slipgate v%s (%s)", Version, Commit)
+	if Commit == "unknown" {
+		return fmt.Sprintf("slipgate v%s%s", Version, tag)
+	}
+	return fmt.Sprintf("slipgate v%s%s (%s)", Version, tag, Commit)
+}
+
+// IsDev returns true if this is a dev channel build.
+func IsDev() bool {
+	return ReleaseTag != ""
 }

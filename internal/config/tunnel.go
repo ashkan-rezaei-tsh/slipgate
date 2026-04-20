@@ -7,8 +7,10 @@ const (
 	TransportSlipstream = "slipstream"
 	TransportVayDNS     = "vaydns"
 	TransportNaive      = "naive"
+	TransportStunTLS    = "stuntls"
 	TransportSSH        = "direct-ssh"
 	TransportSOCKS      = "direct-socks5"
+	TransportExternal   = "external"
 )
 
 // TunnelConfig defines a single tunnel.
@@ -26,6 +28,7 @@ type TunnelConfig struct {
 	VayDNS     *VayDNSConfig     `json:"vaydns,omitempty"`
 	Naive      *NaiveConfig      `json:"naive,omitempty"`
 	MasterDNS  *MasterDNSConfig  `json:"masterdns,omitempty"`
+	StunTLS    *StunTLSConfig    `json:"stuntls,omitempty"`
 }
 
 // DNSTTConfig holds config for DNSTT transport (serves both DNSTT and NoizDNS clients).
@@ -69,11 +72,11 @@ type VayDNSConfig struct {
 	QueueSize     int    `json:"queue_size,omitempty"`     // KCP queue size (default 512)
 	KCPWindowSize int    `json:"kcp_window_size,omitempty"`
 	QueueOverflow string `json:"queue_overflow,omitempty"` // "drop" or "block"
-	RecordType    string `json:"record_type,omitempty"`    // txt, cname, a, aaaa, mx, ns, srv
+	RecordType    string `json:"record_type,omitempty"`    // txt, cname, a, aaaa, mx, ns, srv, null, caa
 }
 
 // ValidVayDNSRecordTypes lists the valid DNS record types for VayDNS.
-var ValidVayDNSRecordTypes = []string{"txt", "cname", "a", "aaaa", "mx", "ns", "srv"}
+var ValidVayDNSRecordTypes = []string{"txt", "cname", "a", "aaaa", "mx", "ns", "srv", "null", "caa"}
 
 // ResolvedIdleTimeout returns the idle-timeout value, applying defaults.
 func (v *VayDNSConfig) ResolvedIdleTimeout() string {
@@ -117,14 +120,30 @@ func (v *VayDNSConfig) ResolvedClientIDSize() int {
 	return v.ClientIDSize
 }
 
+// StunTLSConfig holds config for the TLS + WebSocket SSH proxy transport.
+// Accepts both raw TLS connections (stunnel-style) and WebSocket upgrades,
+// forwarding traffic to the SSH daemon.
+type StunTLSConfig struct {
+	Cert string `json:"cert"` // path to TLS certificate
+	Key  string `json:"key"`  // path to TLS private key
+	Port int    `json:"port"` // listen port (typically 443)
+}
+
 // IsDNSTunnel returns true if the transport uses DNS port 53.
 func (t *TunnelConfig) IsDNSTunnel() bool {
 	switch t.Transport {
-	case TransportDNSTT, TransportSlipstream, TransportVayDNS, TransportMasterDNS:
+	case TransportDNSTT, TransportSlipstream, TransportVayDNS, TransportExternal, TransportMasterDNS:
 		return true
 	}
 	return false
 }
+
+
+// HasManagedService returns true if slipgate manages a systemd service for this tunnel.
+func (t *TunnelConfig) HasManagedService() bool {
+	return t.IsDNSTunnel() && t.Transport != TransportExternal
+}
+
 
 // IsDirectTransport returns true for transports that expose a service directly (no tunnel).
 func (t *TunnelConfig) IsDirectTransport() bool {

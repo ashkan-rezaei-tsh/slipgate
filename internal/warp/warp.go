@@ -102,7 +102,21 @@ func Enable() error {
 func Disable() error {
 	_ = runQuiet("systemctl", "stop", ServiceName+".service")
 	_ = runQuiet("systemctl", "disable", ServiceName+".service")
+	// Clean up any leftover policy routing rules that wg-quick down
+	// may have failed to remove. Without this, managed user UIDs
+	// remain routed to table 200 which has no routes after the
+	// WireGuard interface is torn down — blackholing their traffic.
+	flushRoutingRules()
 	return nil
+}
+
+// flushRoutingRules removes all ip rules pointing to our routing table.
+func flushRoutingRules() {
+	for {
+		if runQuiet("ip", "rule", "del", "table", fmt.Sprintf("%d", RouteTable)) != nil {
+			break
+		}
+	}
 }
 
 // IsRunning checks if the WARP interface is active.
@@ -322,13 +336,11 @@ func createService() error {
 	content := fmt.Sprintf(`[Unit]
 Description=SlipGate WARP (Cloudflare WireGuard)
 After=network.target
-
 [Service]
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=%s up %s
 ExecStop=%s down %s
-
 [Install]
 WantedBy=multi-user.target
 `, wgQuickPath, WarpConf, wgQuickPath, WarpConf)
@@ -357,8 +369,11 @@ func ensureWireGuardTools() error {
 		return nil
 	}
 
-	// Try apt (Debian/Ubuntu) with noninteractive frontend
-	cmd := exec.Command("apt-get", "install", "-y", "wireguard-tools")
+	// Try apt (Debian/Ubuntu) — install the "wireguard" meta-package which
+	// pulls in both wireguard-tools and the kernel module (wireguard-dkms on
+	// older kernels). Installing only wireguard-tools leaves the kernel
+	// module missing on some Debian systems, causing wg-quick to fail.
+	cmd := exec.Command("apt-get", "install", "-y", "wireguard")
 	cmd.Env = append(os.Environ(), "DEBIAN_FRONTEND=noninteractive")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

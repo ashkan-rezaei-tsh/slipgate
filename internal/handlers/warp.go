@@ -98,15 +98,26 @@ func recreateProxies(cfg *config.Config, warpEnabled bool, out actions.OutputWri
 	} else {
 		proxy.RunAsUser = ""
 	}
-	if len(cfg.Users) > 0 {
-		first := cfg.Users[0]
-		if err := proxy.SetupSOCKSWithAuth(first.Username, first.Password); err != nil {
-			out.Warning("Failed to update SOCKS proxy: " + err.Error())
+	directSOCKS := false
+	for _, t := range cfg.Tunnels {
+		if t.Transport == config.TransportSOCKS {
+			directSOCKS = true
 		}
+	}
+	var socksErr error
+	if directSOCKS {
+		if len(cfg.Users) > 0 {
+			socksErr = proxy.SetupSOCKSExternalWithUsers(cfg.Users)
+		} else {
+			socksErr = proxy.SetupSOCKS()
+		}
+	} else if len(cfg.Users) > 0 {
+		socksErr = proxy.SetupSOCKSWithUsers(cfg.Users)
 	} else {
-		if err := proxy.SetupSOCKS(); err != nil {
-			out.Warning("Failed to update SOCKS proxy: " + err.Error())
-		}
+		socksErr = proxy.SetupSOCKS()
+	}
+	if socksErr != nil {
+		out.Warning("Failed to update SOCKS proxy: " + socksErr.Error())
 	}
 
 	// NaiveProxy tunnels — recreate so Caddy runs under the right user

@@ -1,4 +1,4 @@
-VERSION ?= 1.7.0
+VERSION ?= 1.8.0
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 LDFLAGS  = -X github.com/ashkan-rezaei-tsh/slipgate/internal/version.Version=$(VERSION) \
            -X github.com/ashkan-rezaei-tsh/slipgate/internal/version.Commit=$(COMMIT)

@@ -57,7 +57,19 @@ const (
 	FVayDNSUdpTimeout   = 47
 	FVayDNSMaxNumLabels = 48
 	FVayDNSClientIdSize = 49
-	TotalFields         = 50
+	// v21: SSH over TLS + HTTP proxy + WebSocket (50-58)
+	FSSHTlsEnabled            = 50
+	FSSHTlsSni                = 51
+	FSSHHttpProxyHost         = 52
+	FSSHHttpProxyPort         = 53
+	FSSHHttpProxyCustomHost   = 54
+	FSSHWsEnabled             = 55
+	FSSHWsPath                = 56
+	FSSHWsUseTls              = 57
+	FSSHWsCustomHost          = 58
+	// v22: SSH payload (raw prefix for DPI bypass)
+	FSSHPayload               = 59
+	TotalFields               = 60
 )
 
 // Client modes for DNSTT transport (server is the same, client behavior differs).
@@ -94,6 +106,11 @@ var TunnelTypeMap = map[string]map[string]map[string]string{
 		"": {
 			config.BackendSOCKS: "naive",
 			config.BackendSSH:   "naive_ssh",
+		},
+	},
+	config.TransportStunTLS: {
+		"": {
+			config.BackendSSH: "ssh",
 		},
 	},
 	config.TransportSSH: {
