@@ -31,7 +31,7 @@ func handleTunnelEdit(ctx *actions.Context) error {
 
 	// Show current settings
 	out.Print(fmt.Sprintf("  Editing tunnel %q (%s/%s)", tag, tunnel.Transport, tunnel.Backend))
-	out.Print(fmt.Sprintf("  Press Enter to keep current value\n"))
+	out.Print("  Press Enter to keep current value\n")
 
 	// Tag rename
 	newTag := ctx.GetArg("new-tag")
